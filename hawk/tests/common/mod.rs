@@ -59,6 +59,17 @@ pub fn brute_force_negative_log_likelihood(
     compensator - log_term
 }
 
+/// Agreement required between the `O(n)` recursion and the `O(n^2)` definition.
+///
+/// Lives here rather than in `loglikelihood.rs` so that `gate_sensitivity.rs` guards
+/// the same constant the gate actually uses. A meta-test that pinned its own copy
+/// would not notice this one being loosened.
+///
+/// Justified by measurement in `docs/derivations/check_summation_scaling.py`: the
+/// worst observed disagreement is `1.3e-14` relative for `n = 20000` with a slowly
+/// decaying kernel, about 75x inside this gate.
+pub const RECURSION_TOLERANCE: f64 = 1e-12;
+
 /// The scale of the computation, used as the denominator when comparing two
 /// implementations. See `univariate_loglikelihood.md` §5.
 ///

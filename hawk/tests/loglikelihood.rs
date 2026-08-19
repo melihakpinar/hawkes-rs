@@ -14,18 +14,11 @@
 
 mod common;
 
-use common::{brute_force_negative_log_likelihood as brute_force, computation_scale};
+use common::{
+    RECURSION_TOLERANCE, brute_force_negative_log_likelihood as brute_force, computation_scale,
+};
 use hawk::univariate::{Observation, Parameters, negative_log_likelihood};
 use proptest::prelude::*;
-
-/// Agreement required between the recursion and the definition.
-///
-/// Both evaluate the same quantity in the same `f64` arithmetic and differ only in
-/// summation order, so this is far tighter than the 1e-9 used against `tick`. It is
-/// justified by measurement, not taste: `docs/derivations/check_summation_scaling.py`
-/// puts the worst observed disagreement at `1.3e-14` relative for `n = 20000` with a
-/// slowly decaying kernel, about 75x inside this gate.
-const RECURSION_TOLERANCE: f64 = 1e-12;
 
 /// Upper bound on `n` for the comparison.
 ///

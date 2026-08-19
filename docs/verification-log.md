@@ -468,6 +468,120 @@ Three no longer have a target, because M1 deleted what they broke, and they are
 After the full re-run the working tree was byte-identical: 27 tests green, all ten
 fixture checksums unchanged.
 
+---
+
+# Closing the three sabotage gaps (issue #7)
+
+M1's report identified three tests that existed but had never been shown to fail.
+
+## Harness 9 — the gate denominator (gap a)
+
+`hawk/tests/gate_sensitivity.rs`. `computation_scale` is the denominator of the step 7
+comparison, and it was unguarded in the direction that matters: **inflating it loosens
+the gate, and a looser gate does not fail — it stops catching things.** That is the one
+regression class a suite cannot notice by running.
+
+The meta-tests pin the gate's sensitivity to hand calculations, computed in a separate
+implementation and written out in the test. Pinning it to a value
+`computation_scale` produced would move with the bug and see nothing.
+
+### S23 — inflate the denominator by 10x
+
+**RED on all three tests.** `the_gate_rejects_just_above_its_sensitivity` reports that
+the gate accepted an error above its documented sensitivity, which is the exact
+symptom of a silently weakened gate.
+
+### S24 — sum the signed logs instead of their magnitudes
+
+`scale += intensity.ln().abs()` -> `scale += intensity.ln()`.
+
+**RED on `the_denominator_sums_magnitudes_not_the_signed_sum` only.** The other two
+stayed green, correctly: their case has both `log lambda` positive, so the two forms
+coincide there. The discriminating case was built for this — its signed sum is
+`0.0924` against `12.13` of magnitude, a factor of 131.
+
+### S25 — "simplify" the denominator to `|nll|`
+
+The change a future reader is most likely to make, since `|nll|` is the obvious thing
+to divide by.
+
+**RED on all three**, with a message that names the diagnosis rather than just the
+numbers:
+
+```
+the gate rejected an error of 7.497173422226648e-12, which is below its documented
+sensitivity of 8.330192691362942e-12. The denominator has SHRUNK -- if it was replaced
+by |nll| (5.396890080120764) the boundary would sit at 5.396890080120764e-12, which is
+exactly this symptom.
+```
+
+## Harness 10 — does the mean-intensity oracle earn its place? (gap b)
+
+The question was whether `converges_to_the_stationary_mean_intensity` catches anything
+`time_rescaled_residuals_are_unit_exponential` does not. Both outcomes are reported, as
+required.
+
+### S26 — branching-ratio convention changed in the simulator only
+
+`alpha` -> `alpha/beta`, i.e. the simulator switches to [Laub2015]'s kernel while the
+compensator keeps ours.
+
+**Both oracles RED.** So this sabotage demonstrates *no* unique coverage: the residual
+test alone would have caught it. Taken by itself, this is an argument for deleting the
+mean-intensity test.
+
+### S27 — the same reparametrization applied *consistently*
+
+Simulator **and** compensator both switched to `alpha*exp(-beta t)`, so they agree with
+each other. Only `stationary_mean_intensity()` still reports `mu/(1-alpha)`.
+
+**Mean intensity RED, time rescaling GREEN.**
+
+```
+seed 1: observed mean intensity 0.799 vs analytic 1.2, relative error 0.334 > 0.05.
+Under the alpha/beta branching-ratio convention the prediction would be 0.7999999999999999.
+```
+
+**Verdict: keep it.** The oracle has unique coverage, and the class it covers is
+exactly the one CLAUDE.md §1.3 warns about. Time rescaling checks the simulator and the
+compensator *against each other*, so it is structurally blind to any error they share —
+and a convention error is precisely the kind of mistake made consistently across a
+codebase rather than in one place. The mean-intensity test is the only oracle here
+anchored to something outside the implementation, namely [Laub2015, eq. 6].
+
+The failure message diagnosing the exact wrong convention (`0.7999999999999999`
+matching the observed `0.799`) is not decoration; it is what turns a red test into a
+located bug.
+
+Note that S26, not S27, is the sabotage the issue asked for. Had only S26 been run the
+conclusion would have been the opposite and the oracle would have been deleted. The
+lesson is that "does this test have unique coverage?" is not answered by one sabotage —
+it is answered by finding the sabotage that *isolates* it, and failing to find one is
+not the same as proving none exists.
+
+## Harness 11 — the simulator's structural tests (gap c)
+
+### S28 — return the events in reverse order
+
+**RED**, `simulated_realizations_satisfy_the_input_contract` first, naming the offending
+pair:
+
+```
+UnsortedEvents { index: 1, previous_index: 0, previous: 497.8483148213864,
+                 current: 497.50120108924796 }
+```
+
+The residual tests went red too, since the compensator is meaningless on unsorted
+input. `converges_to_the_stationary_mean_intensity` stayed green — it counts events and
+does not care about their order.
+
+### S29 — ignore the caller's RNG and seed from entropy
+
+**RED on `simulation_is_reproducible_from_a_seed` alone.** Every statistical oracle
+stayed green, which is right: they hold in distribution and do not depend on any
+particular realization. Reproducibility is the one property only this test asserts, and
+it is the property that makes every other failure in this suite debuggable.
+
 ## Summary
 
 | ID | Harness | What was broken | Result |
@@ -495,6 +609,13 @@ fixture checksums unchanged.
 | S20 | fit | fitted baseline perturbed by 5% | RED |
 | S21 | fit | per-event normalization dropped | RED |
 | S22 | differential | `D*T` term dropped from the OQ-8 identity | RED, by exactly `T` |
+| S23 | gate denominator | `computation_scale` inflated 10x | RED |
+| S24 | gate denominator | magnitudes replaced by the signed sum | RED on the mixed-sign case only |
+| S25 | gate denominator | "simplified" to `|nll|` | RED, with the diagnosis named |
+| S26 | simulator | branching ratio `alpha` -> `alpha/beta`, simulator only | RED on **both** oracles — no unique coverage shown |
+| S27 | simulator + compensator | the same, applied consistently | mean intensity RED, time rescaling GREEN — unique coverage proven |
+| S28 | simulator | events returned in reverse order | RED |
+| S29 | simulator | caller's RNG ignored | RED on reproducibility alone |
 
 Every harness has been observed both red and green. The working tree after all
 sabotages is byte-identical to before them.
