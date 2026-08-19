@@ -438,8 +438,35 @@ indistinguishable direction is the dangerous one — it reads as "the oracle is 
 when the truth is "nothing was broken".
 
 Later sabotage runs assert that the patch applied and that its anchor is unique before
-believing any result. Any sabotage recorded in this file without that confirmation
-should be re-run before it is trusted.
+believing any result.
+
+### The M0 entries, re-run under that rule
+
+The M0 sabotages predate the apply-assertion, so by the rule above they could not be
+trusted as recorded. They were re-run. Six still have a target and all six went red
+again:
+
+| ID | target | result on re-run |
+| --- | --- | --- |
+| S2 | adjacency transposed in the coefficient-layout check | RED |
+| S5 | one analytic gradient component negated | RED |
+| S6 | forward differences instead of central | RED |
+| S7 | a committed fixture corrupted | RED |
+| S8 | fixtures removed entirely | RED, and loudly |
+| S9 | `GRADIENT_TOLERANCE` loosened to 1e-4 | RED at compile time |
+
+Three no longer have a target, because M1 deleted what they broke, and they are
+**not** claimed as current evidence:
+
+- **S1** perturbed the stub log-likelihood. The stub is gone; S22 supersedes it, and
+  is stronger, since it breaks the real identity rather than a playback value.
+- **S3** made the stub fitter return constant parameters. Superseded by S20.
+- **S4** made the round-trip generator emit non-stationary parameters. That generator
+  was replaced; the current test draws a stationary branching ratio by construction
+  and the corresponding guard is `rejects_data_that_cannot_identify_the_parameters`.
+
+After the full re-run the working tree was byte-identical: 27 tests green, all ten
+fixture checksums unchanged.
 
 ## Summary
 
