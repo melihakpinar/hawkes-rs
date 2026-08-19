@@ -1,0 +1,119 @@
+{
+  "adjacency": [
+    [
+      0.25
+    ]
+  ],
+  "baseline": [
+    0.6
+  ],
+  "decay": 1.3,
+  "description": "Hand-built, one exact tie. The minimal case where the grouped recursion and the textbook recursion disagree.",
+  "end_time": 6.0,
+  "evaluations": [
+    {
+      "adjacency": [
+        [
+          0.25
+        ]
+      ],
+      "baseline": [
+        0.6
+      ],
+      "coeffs": [
+        0.6,
+        0.25
+      ],
+      "label": "truth",
+      "tick_grad": [
+        -0.24046584378357339,
+        0.43200115426446506
+      ],
+      "tick_loss": 0.1236189029080346
+    },
+    {
+      "adjacency": [
+        [
+          0.25
+        ]
+      ],
+      "baseline": [
+        1.02
+      ],
+      "coeffs": [
+        1.02,
+        0.25
+      ],
+      "label": "baseline_scaled_up",
+      "tick_grad": [
+        0.30462775179663115,
+        0.6280019018536338
+      ],
+      "tick_loss": 0.15520989367933238
+    },
+    {
+      "adjacency": [
+        [
+          0.1
+        ]
+      ],
+      "baseline": [
+        0.6
+      ],
+      "coeffs": [
+        0.6,
+        0.1
+      ],
+      "label": "adjacency_scaled_down",
+      "tick_grad": [
+        -0.3642757058565306,
+        0.3605373643230714
+      ],
+      "tick_loss": 0.06392701939230996
+    },
+    {
+      "adjacency": [
+        [
+          0.375
+        ]
+      ],
+      "baseline": [
+        0.36
+      ],
+      "coeffs": [
+        0.36,
+        0.375
+      ],
+      "label": "both_scaled",
+      "tick_grad": [
+        -0.840564214596863,
+        0.2671581085302108
+      ],
+      "tick_loss": 0.28888353784090226
+    }
+  ],
+  "events": [
+    [
+      1.0,
+      2.0,
+      2.0,
+      3.5,
+      4.0
+    ]
+  ],
+  "generator": {
+    "numpy_version": "2.5.2",
+    "origin": "hand-built",
+    "python_version": "3.13.5",
+    "script": "benchmarks/docker/generate_fixtures.py",
+    "seed": null,
+    "tick_version": "0.8.0.2"
+  },
+  "has_ties": true,
+  "n_jumps": 5,
+  "n_nodes": 1,
+  "name": "univariate_tied_pair",
+  "schema_version": 2,
+  "spectral_radius": 0.25,
+  "tick_loss_convention": "negative log-likelihood ratio w.r.t. unit-rate Poisson, divided by n_jumps; see docs/open-questions.md OQ-8"
+}

@@ -1,0 +1,186 @@
+{
+  "adjacency": [
+    [
+      0.2,
+      0.15
+    ],
+    [
+      0.1,
+      0.25
+    ]
+  ],
+  "baseline": [
+    0.4,
+    0.5
+  ],
+  "decay": 1.0,
+  "description": "Hand-built, simultaneous events on different components, plus a tie within one. Cross-component ties are the case an index-based implementation is most likely to get wrong.",
+  "end_time": 7.0,
+  "evaluations": [
+    {
+      "adjacency": [
+        [
+          0.2,
+          0.15
+        ],
+        [
+          0.1,
+          0.25
+        ]
+      ],
+      "baseline": [
+        0.4,
+        0.5
+      ],
+      "coeffs": [
+        0.4,
+        0.5,
+        0.2,
+        0.15,
+        0.1,
+        0.25
+      ],
+      "label": "truth",
+      "tick_grad": [
+        -0.18288358463643517,
+        0.055812213856507475,
+        0.2636545498377907,
+        0.2753567910014626,
+        0.04900956689017433,
+        0.30000148887472355
+      ],
+      "tick_loss": -0.007121482498465698
+    },
+    {
+      "adjacency": [
+        [
+          0.2,
+          0.15
+        ],
+        [
+          0.1,
+          0.25
+        ]
+      ],
+      "baseline": [
+        0.68,
+        0.85
+      ],
+      "coeffs": [
+        0.68,
+        0.85,
+        0.2,
+        0.15,
+        0.1,
+        0.25
+      ],
+      "label": "baseline_scaled_up",
+      "tick_grad": [
+        0.21292189826623534,
+        0.35623388815944157,
+        0.3434535242915211,
+        0.34935599389239497,
+        0.20171451207773594,
+        0.36434871877061215
+      ],
+      "tick_loss": 0.08589935651422677
+    },
+    {
+      "adjacency": [
+        [
+          0.08000000000000002,
+          0.06
+        ],
+        [
+          0.04000000000000001,
+          0.1
+        ]
+      ],
+      "baseline": [
+        0.4,
+        0.5
+      ],
+      "coeffs": [
+        0.4,
+        0.5,
+        0.08000000000000002,
+        0.06,
+        0.04000000000000001,
+        0.1
+      ],
+      "label": "adjacency_scaled_down",
+      "tick_grad": [
+        -0.28619138360308827,
+        -0.04042611837505916,
+        0.2279155857391313,
+        0.24326174145643648,
+        -0.027145608930143283,
+        0.26921857879116157
+      ],
+      "tick_loss": -0.10372899411303839
+    },
+    {
+      "adjacency": [
+        [
+          0.30000000000000004,
+          0.22499999999999998
+        ],
+        [
+          0.15000000000000002,
+          0.375
+        ]
+      ],
+      "baseline": [
+        0.24,
+        0.3
+      ],
+      "coeffs": [
+        0.24,
+        0.3,
+        0.30000000000000004,
+        0.22499999999999998,
+        0.15000000000000002,
+        0.375
+      ],
+      "label": "both_scaled",
+      "tick_grad": [
+        -0.6047445797913471,
+        -0.23848364970284303,
+        0.2060659083713443,
+        0.22062408348144524,
+        -0.04762599175129645,
+        0.2577337264732678
+      ],
+      "tick_loss": 0.14387578607369356
+    }
+  ],
+  "events": [
+    [
+      1.0,
+      2.5,
+      2.5,
+      4.0
+    ],
+    [
+      1.0,
+      3.0,
+      4.0,
+      4.0
+    ]
+  ],
+  "generator": {
+    "numpy_version": "2.5.2",
+    "origin": "hand-built",
+    "python_version": "3.13.5",
+    "script": "benchmarks/docker/generate_fixtures.py",
+    "seed": null,
+    "tick_version": "0.8.0.2"
+  },
+  "has_ties": true,
+  "n_jumps": 8,
+  "n_nodes": 2,
+  "name": "bivariate_tied_cross_component",
+  "schema_version": 2,
+  "spectral_radius": 0.35,
+  "tick_loss_convention": "negative log-likelihood ratio w.r.t. unit-rate Poisson, divided by n_jumps; see docs/open-questions.md OQ-8"
+}

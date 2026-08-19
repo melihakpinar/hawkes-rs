@@ -26,7 +26,7 @@ from tick.hawkes import ModelHawkesExpKernLogLik, SimuHawkesExpKernels
 
 import tick
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # Scenarios span univariate and multivariate, small and large event counts, and
 # symmetric and asymmetric excitation. The asymmetric ones are load-bearing: a
@@ -92,6 +92,75 @@ SCENARIOS = [
     },
 ]
 
+# Scenarios with exact ties. These cannot come from the simulator: Ogata thinning
+# draws continuous inter-arrival times, so it never produces two events at the same
+# instant. They are constructed by hand and only their oracle values come from tick.
+#
+# Their purpose is to give the grouped recursion an INDEPENDENT witness. Without them
+# the tie handling in docs/derivations/univariate_loglikelihood.md §4.2 is checked
+# only against hawk's own brute force, and both come from the same derivation and the
+# same author. tick is a third party that agrees with neither by construction.
+#
+# tick resolves a tie by time rather than by array index, so the OQ-8 identity holds
+# on these too — measured in benchmarks/docker/tie_identity.py, and the reason these
+# fixtures are worth having rather than being expected to fail.
+#
+# Note what these fixtures do NOT establish. On tied data the objective is not a
+# likelihood at all (univariate_loglikelihood.md §3.1): Laub2015 Theorem 3 is the
+# likelihood of a simple point process. They validate arithmetic, not statistics.
+TIED_SCENARIOS = [
+    {
+        "name": "univariate_tied_pair",
+        "description": (
+            "Hand-built, one exact tie. The minimal case where the grouped "
+            "recursion and the textbook recursion disagree."
+        ),
+        "baseline": [0.6],
+        "adjacency": [[0.25]],
+        "decay": 1.3,
+        "end_time": 6.0,
+        "events": [[1.0, 2.0, 2.0, 3.5, 4.0]],
+    },
+    {
+        "name": "univariate_tied_triple",
+        "description": (
+            "Hand-built, a three-way tie. A grouping bug that survives a pair "
+            "because it happens to double-count once will not survive a triple."
+        ),
+        "baseline": [0.5],
+        "adjacency": [[0.3]],
+        "decay": 0.8,
+        "end_time": 8.0,
+        "events": [[0.5, 2.0, 2.0, 2.0, 4.0, 6.5]],
+    },
+    {
+        "name": "univariate_tied_at_boundaries",
+        "description": (
+            "Hand-built, ties at both ends: a tie at t=0 and a tie at t=end_time. "
+            "Exercises the recursion's base case and the compensator's zero-length "
+            "tail together, both of which C8 admits."
+        ),
+        "baseline": [0.7],
+        "adjacency": [[0.2]],
+        "decay": 1.1,
+        "end_time": 5.0,
+        "events": [[0.0, 0.0, 1.5, 3.0, 5.0, 5.0]],
+    },
+    {
+        "name": "bivariate_tied_cross_component",
+        "description": (
+            "Hand-built, simultaneous events on different components, plus a tie "
+            "within one. Cross-component ties are the case an index-based "
+            "implementation is most likely to get wrong."
+        ),
+        "baseline": [0.4, 0.5],
+        "adjacency": [[0.2, 0.15], [0.1, 0.25]],
+        "decay": 1.0,
+        "end_time": 7.0,
+        "events": [[1.0, 2.5, 2.5, 4.0], [1.0, 3.0, 4.0, 4.0]],
+    },
+]
+
 # Parameter points at which the oracle values are recorded. Recording the loss at
 # perturbed parameters as well as at the truth pins the *shape* of the likelihood
 # surface, not just one number: an implementation with a compensating error at the
@@ -123,16 +192,23 @@ def build(scenario):
     end_time = float(scenario["end_time"])
     n_nodes = baseline.size
 
-    simulator = SimuHawkesExpKernels(
-        adjacency=adjacency,
-        decays=np.full_like(adjacency, decay),
-        baseline=baseline,
-        end_time=end_time,
-        seed=scenario["seed"],
-        verbose=False,
-    )
-    simulator.simulate()
-    events = [np.asarray(t, dtype=float) for t in simulator.timestamps]
+    if "events" in scenario:
+        # Hand-built scenario. Nothing is simulated, so there is no seed; the
+        # timestamps are the input and only tick's values are derived.
+        events = [np.asarray(e, dtype=float) for e in scenario["events"]]
+        spectral_radius = float(np.max(np.abs(np.linalg.eigvals(adjacency))))
+    else:
+        simulator = SimuHawkesExpKernels(
+            adjacency=adjacency,
+            decays=np.full_like(adjacency, decay),
+            baseline=baseline,
+            end_time=end_time,
+            seed=scenario["seed"],
+            verbose=False,
+        )
+        simulator.simulate()
+        events = [np.asarray(t, dtype=float) for t in simulator.timestamps]
+        spectral_radius = float(simulator.spectral_radius())
 
     model = ModelHawkesExpKernLogLik(decay=decay)
     # end_times is passed explicitly. Left as None, tick infers the window as
@@ -164,7 +240,8 @@ def build(scenario):
             "tick_version": tick.__version__,
             "numpy_version": np.__version__,
             "python_version": ".".join(str(v) for v in sys.version_info[:3]),
-            "seed": scenario["seed"],
+            "seed": scenario.get("seed"),
+            "origin": "hand-built" if "events" in scenario else "simulated",
         },
         # tick's ModelHawkesExpKernLogLik.loss is NOT the plain negative
         # log-likelihood. Measured against the closed-form Poisson case
@@ -185,7 +262,8 @@ def build(scenario):
         "end_time": end_time,
         "baseline": [float(v) for v in baseline],
         "adjacency": [[float(v) for v in row] for row in adjacency],
-        "spectral_radius": float(simulator.spectral_radius()),
+        "spectral_radius": spectral_radius,
+        "has_ties": bool(any(len(set(e.tolist())) != e.size for e in events)),
         "n_jumps": int(sum(len(t) for t in events)),
         "events": [[float(v) for v in t] for t in events],
         "evaluations": evaluations,
@@ -206,7 +284,7 @@ def main():
     args.out.mkdir(parents=True, exist_ok=True)
 
     failures = 0
-    for scenario in SCENARIOS:
+    for scenario in SCENARIOS + TIED_SCENARIOS:
         fixture = build(scenario)
         text = render(fixture)
         path = args.out / f"{scenario['name']}.json"

@@ -395,8 +395,44 @@ Consequences for the gate:
 1. **The tolerance is relative, not absolute.** `|nll|` grows roughly linearly in `n`
    — 7205 at `n = 20000` — so an absolute `1e-12` gate would demand `1.8e-19`
    relative and fail on correct code. At `n = 20000` the observed absolute
-   discrepancy is about `9e-11`, already a hundredfold over an absolute `1e-12`. The
-   gate is `|recursive - brute| / max(1, |brute|) <= 1e-12`.
+   discrepancy is about `9e-11`, already a hundredfold over an absolute `1e-12`.
+
+   **But the denominator must not be `|nll|`.** From (4.5),
+
+   ```
+   nll = mu*T + alpha*compensator_excitation - log_term
+   ```
+
+   is a difference of large terms, and it passes through zero. At parameter points
+   where `mu*T + alpha*compensator_excitation ~= log_term` the result is near zero
+   while the quantities actually being summed stay large, so a relative error taken
+   against `|nll|` diverges on correct code. A randomized parameter sweep enters that
+   region eventually — it is not a corner case, it is a surface.
+
+   The gate therefore measures error relative to the **scale of the computation**,
+   not to the size of its result:
+
+   ```
+   scale = mu*T
+         + alpha * compensator_excitation           # both non-negative
+         + sum_j c_j * |log(lambda_j)|              # magnitudes, not the signed sum
+
+   |recursive - brute| <= 1e-12 * scale
+   ```
+
+   This is what floating-point error is actually proportional to: the magnitudes fed
+   into the accumulators, independent of how much they cancel at the end.
+
+   Note the third term is `sum |log lambda_j|`, not `|sum log lambda_j|`. The signed
+   sum has the same defect one level down — `log lambda_j` is negative wherever
+   `lambda_j < 1`, which is routine for `mu < 1`, so a `log_term` near zero can be the
+   cancellation of thousands of `O(1)` contributions. Summing magnitudes measures the
+   accumulator traffic honestly.
+
+   All three terms are available for free: the implementation already accumulates the
+   first two, and the third costs one `abs` per event in the test's reference path.
+   **The test's doc comment must carry this reasoning**, or the unusual denominator
+   reads as an accident and gets "simplified" back to `|nll|`.
 2. **The comparison test is bounded at `n <= 50000`.** At the measured worst case of
    `1.3e-14` relative for `n = 20000`, and with the error growing no faster than
    `sqrt(n)`, `n = 50000` predicts about `2e-14` — roughly 50x inside the gate.

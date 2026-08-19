@@ -55,6 +55,10 @@ struct Fixture {
     adjacency: Vec<Vec<f64>>,
     spectral_radius: f64,
     n_jumps: usize,
+    /// True when the scenario contains exact ties. Tied scenarios are hand-built,
+    /// not simulated: Ogata thinning draws continuous inter-arrival times and never
+    /// produces two events at one instant.
+    has_ties: bool,
     /// `events[j]` holds the timestamps of component `j`.
     events: Vec<Vec<f64>>,
     evaluations: Vec<Evaluation>,
@@ -168,11 +172,26 @@ fn fixtures_are_internally_consistent() {
         fixtures.iter().any(|f| f.n_nodes > 1),
         "corpus has no multivariate fixture"
     );
+    // Tied fixtures are the only independent witness for the grouped recursion of
+    // docs/derivations/univariate_loglikelihood.md §4.2. Without them, tie handling
+    // is checked only against hawk's own brute force, and both come from the same
+    // derivation. `tick` resolves ties by time rather than by array index, so these
+    // are expected to agree rather than to fail -- measured in
+    // benchmarks/docker/tie_identity.py.
+    assert!(
+        fixtures.iter().filter(|f| f.has_ties).count() >= 3,
+        "corpus needs tied fixtures to witness the grouped recursion independently"
+    );
+    assert!(
+        fixtures.iter().any(|f| f.has_ties && f.n_nodes > 1),
+        "corpus has no multivariate tied fixture; cross-component ties are what an \
+         index-based implementation is most likely to get wrong"
+    );
 
     for fixture in &fixtures {
         let name = &fixture.name;
         assert_eq!(
-            fixture.schema_version, 1,
+            fixture.schema_version, 2,
             "{name}: unexpected schema version"
         );
         assert!(fixture.decay > 0.0, "{name}: decay must be positive");
@@ -231,6 +250,14 @@ fn fixtures_are_internally_consistent() {
             assert!(
                 timestamps.windows(2).all(|w| w[0] <= w[1]),
                 "{name}: component {component} timestamps are not sorted"
+            );
+            // Non-strict above: ties are admitted by the input contract
+            // (conventions.md C8). Cross-check the declared flag so a fixture cannot
+            // quietly gain or lose ties without the corpus assertions noticing.
+            let component_has_ties = timestamps.windows(2).any(|w| w[0] == w[1]);
+            assert!(
+                !component_has_ties || fixture.has_ties,
+                "{name}: component {component} has ties but has_ties is false"
             );
             assert!(
                 timestamps

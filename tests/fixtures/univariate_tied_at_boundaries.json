@@ -1,0 +1,120 @@
+{
+  "adjacency": [
+    [
+      0.2
+    ]
+  ],
+  "baseline": [
+    0.7
+  ],
+  "decay": 1.1,
+  "description": "Hand-built, ties at both ends: a tie at t=0 and a tie at t=end_time. Exercises the recursion's base case and the compensator's zero-length tail together, both of which C8 admits.",
+  "end_time": 5.0,
+  "evaluations": [
+    {
+      "adjacency": [
+        [
+          0.2
+        ]
+      ],
+      "baseline": [
+        0.7
+      ],
+      "coeffs": [
+        0.7,
+        0.2
+      ],
+      "label": "truth",
+      "tick_grad": [
+        -0.5311299368238966,
+        0.418912039270698
+      ],
+      "tick_loss": 0.1885867897606445
+    },
+    {
+      "adjacency": [
+        [
+          0.2
+        ]
+      ],
+      "baseline": [
+        1.19
+      ],
+      "coeffs": [
+        1.19,
+        0.2
+      ],
+      "label": "baseline_scaled_up",
+      "tick_grad": [
+        0.015923162955136256,
+        0.5068811074706657
+      ],
+      "tick_loss": 0.08507582663365561
+    },
+    {
+      "adjacency": [
+        [
+          0.08000000000000002
+        ]
+      ],
+      "baseline": [
+        0.7
+      ],
+      "coeffs": [
+        0.7,
+        0.08000000000000002
+      ],
+      "label": "adjacency_scaled_down",
+      "tick_grad": [
+        -0.5683208586562352,
+        0.4077647736291173
+      ],
+      "tick_loss": 0.13897400448432354
+    },
+    {
+      "adjacency": [
+        [
+          0.30000000000000004
+        ]
+      ],
+      "baseline": [
+        0.42
+      ],
+      "coeffs": [
+        0.42,
+        0.30000000000000004
+      ],
+      "label": "both_scaled",
+      "tick_grad": [
+        -1.3082836903201849,
+        0.30822109350198545
+      ],
+      "tick_loss": 0.46673782829305654
+    }
+  ],
+  "events": [
+    [
+      0.0,
+      0.0,
+      1.5,
+      3.0,
+      5.0,
+      5.0
+    ]
+  ],
+  "generator": {
+    "numpy_version": "2.5.2",
+    "origin": "hand-built",
+    "python_version": "3.13.5",
+    "script": "benchmarks/docker/generate_fixtures.py",
+    "seed": null,
+    "tick_version": "0.8.0.2"
+  },
+  "has_ties": true,
+  "n_jumps": 6,
+  "n_nodes": 1,
+  "name": "univariate_tied_at_boundaries",
+  "schema_version": 2,
+  "spectral_radius": 0.2,
+  "tick_loss_convention": "negative log-likelihood ratio w.r.t. unit-rate Poisson, divided by n_jumps; see docs/open-questions.md OQ-8"
+}
