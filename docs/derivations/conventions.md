@@ -352,6 +352,22 @@ RuntimeError: Provided end_time (3) is smaller than last time of component 0 (4)
    `docs/derivations/univariate_loglikelihood.md` §5, where the naive
    event-to-event recursion is shown to be wrong in exactly this case.
 
+   Two further facts about ties, both checked rather than assumed, because each would
+   otherwise cost someone a long search in the wrong place:
+
+   - **The `tick` differential identity survives ties.** `tick` resolves a tie by
+     *time*, not by array index, so `nll == tick_loss*n_jumps + D*T` continues to
+     hold on tied data — verified on a tied pair, a triple tie, ties at both ends of
+     the window, and a cross-component tie, all to `<= 1.8e-15`
+     (`benchmarks/docker/tie_identity.py`). Had `tick` used index-based semantics the
+     identity would have had to break, and that break would not have been a defect.
+     It does not break. A tied fixture may safely be added to the corpus.
+   - **On tied data the objective is not a likelihood.** [Laub2015, Theorem 3] is the
+     likelihood of a *simple* point process, in which simultaneous arrivals have
+     probability zero. The expression still evaluates and still matches `tick`, but
+     the maximum-likelihood asymptotics do not apply, and the round-trip property test
+     must not synthesise ties. See `univariate_loglikelihood.md` §3.1.
+
 4. **Every timestamp must lie in `[0, T]`**, endpoints included. `T` is supplied by
    the caller and never inferred (C5).
 

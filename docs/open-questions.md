@@ -235,6 +235,19 @@ with excitation present. Experiment E2 supports it from a second direction, sinc
 `tick`'s gradient matches the derivative of that same `nll` at `alpha != 0`, which
 means the difference between the two is constant in the parameters.
 
+**Ties do not break it.** Checked separately
+(`benchmarks/docker/tie_identity.py`), because if `tick` resolved ties by array index
+— the textbook recursion — the identity would necessarily fail on tied data and the
+failure would not be a defect. `tick` resolves them by time, matching `hawk`'s grouped
+recursion, and the identity holds to `<= 1.8e-15` on a tied pair, a triple tie, ties at
+both window ends, and a cross-component tie. Index-based semantics would have been off
+by `0.39` to `1.05` on the same data, so the check discriminates.
+
+All six committed fixtures come from simulation and are therefore tie-free, so this
+does not affect the evidence above; it means a tied fixture *may* be added later
+without the differential test being expected to break. Recorded because the opposite
+assumption is the natural one and would send someone hunting in the wrong place.
+
 **Left OPEN deliberately.** M1's plan closes this at Part B step 9 with `hawk`'s own
 implementation, after that implementation has been validated against non-`tick`
 oracles. The Python reference above shares an author with the derivation and has not

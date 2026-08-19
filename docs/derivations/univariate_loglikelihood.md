@@ -171,6 +171,39 @@ nll(mu, alpha, beta)
                                                                            (3.3)
 ```
 
+### 3.1 With ties, (3.3) is not a likelihood
+
+[Laub2015, Theorem 3] is the likelihood of a **simple** point process. Its §4.1 proof
+uses that assumption directly — *"The HP is a simple point process, meaning that
+multiple arrivals cannot occur at the same time"* — to set `F*(t_k) = 0` and obtain
+eq. 14.
+
+In a simple point process the probability of two simultaneous arrivals is zero. So on
+data containing exact ties, which `hawk`'s input contract admits (C8), (3.3) is **not
+a likelihood**. It is a formal extension of one: the expression still evaluates, the
+intensity path is still well defined, and it still agrees with `tick` (see §7), but
+it is no longer the density of anything the model can generate.
+
+This is a statement about interpretation, not a defect, and it has consequences that
+must not be discovered later:
+
+- **The maximum-likelihood estimator's guarantees do not carry over.** Consistency,
+  asymptotic normality and efficiency — proved for this estimator by Ogata, per
+  [Laub2015] §4.3 — are results about the likelihood of a simple point process. On
+  tied data the estimator is still a well-defined M-estimator, and it is not a
+  maximum-likelihood estimator in the sense those theorems require. `hawk` must not
+  advertise MLE asymptotics for tied input.
+- **The round-trip property test (Part B step 10) must not generate ties.** Parameters
+  are not recoverable from data the model assigns probability zero to, so a tie-
+  generating strategy would produce a failure that looks like an estimator defect and
+  is not one. Ogata thinning (Part B step 6) generates continuous inter-arrival times
+  and will not produce ties on its own; the hazard is a `proptest` strategy that
+  synthesises timestamps directly. **The test's doc comment must say why ties are
+  excluded**, or the exclusion will look arbitrary and be removed by someone tidying up.
+- Ties remain supported for *evaluation* — computing the objective, the gradient, and
+  the compensator on real data whose clock resolution produced them. What is withheld
+  is the statistical interpretation, not the arithmetic.
+
 (3.3) is the **definition**, and is [Laub2015, eq. 19] under the substitution of
 §1.1 and with the horizon of §1.2. It is `O(n^2)` because of the inner sum. M1 Part B
 step 5 transcribes exactly this, with no simplification, as the reference oracle.
@@ -306,9 +339,15 @@ The loop visits each event once and accumulates `c_j` implicitly through
   near the end of the window — the direct form loses precision to cancellation,
   because `exp(-x)` rounds to a value very close to 1. This matters: in a long
   window, many events sit close to `T`.
-- `ln(intensity)` needs no `ln_1p`. `intensity >= mu`, which is bounded away from
-  zero by the positivity constraint, so the argument is never near 1 in a way that
-  costs precision, and never near 0.
+- `ln(intensity)` is computed with plain `ln`, **not** `ln_1p`. The reason is not
+  that `intensity` stays away from 1 — it does not, `mu = 1.0` is an ordinary
+  parameter value and then `intensity` sits just above 1 whenever the excitation
+  state is small. `ln_1p(x)` is only worth reaching for when `x = intensity - 1` is
+  itself available to full precision. Here `intensity` is formed as
+  `mu + alpha*beta*B`, so computing `intensity - 1` would round exactly as badly as
+  `intensity` did: the subtraction cannot recover information the addition already
+  discarded. `ln_1p` would buy nothing and would obscure the expression. What does
+  matter is that `intensity >= mu > 0`, so the argument is never zero or negative.
 - `exp(-beta * d)` with `d > 0` and `beta > 0` is in `(0, 1)`; it underflows to `0`
   for large `beta*d`, which is the correct limit — an event long past has no
   influence. No guard needed.
@@ -318,8 +357,56 @@ The loop visits each event once and accumulates `c_j` implicitly through
 
 Part B step 7 must show (4.5) agrees with (3.3) to `1e-12` over randomized
 parameters and event counts. Both evaluate the same quantity in the same arithmetic
-and differ only in summation order, so a larger gap is a real defect, not
-accumulation.
+and differ only in summation order, so a larger gap is a real defect — **but that
+claim needs a bound on `n`, and it needs the tolerance to be relative.**
+
+`docs/derivations/check_summation_scaling.py` measures it, using `math.fsum` (exactly
+rounded) as ground truth so each side's own error is visible rather than only their
+difference. Relative to `|nll|`:
+
+| `beta` | `n` | `|nll|` | recursion vs exact | brute force vs exact | recursion vs brute |
+| --- | --- | --- | --- | --- | --- |
+| 0.90 | 2000 | 727 | 0.0 | 0.0 | 0.0 |
+| 0.90 | 8000 | 2876 | 6.3e-16 | 0.0 | 6.3e-16 |
+| 0.90 | 20000 | 7205 | 1.0e-15 | 0.0 | 1.0e-15 |
+| 0.05 | 2000 | 666 | 6.8e-15 | 0.0 | 6.8e-15 |
+| 0.05 | 8000 | 2680 | 1.0e-15 | 0.0 | 1.0e-15 |
+| 0.05 | 20000 | 6699 | 1.3e-14 | 0.0 | 1.3e-14 |
+
+Two things this shows, and neither is what a first guess would predict.
+
+**The `O(n^2)` brute force is not the error-accumulating side.** Its error against
+`fsum` is exactly zero at every `n` tested, including `beta = 0.05`, where the kernel
+decays slowly. The reason is structural: the inner sum's terms are
+`exp(-beta*(t_k - t_j))`, which fall off geometrically, so however long the sum
+formally is, only `O(1/(beta*inter-arrival))` terms are numerically significant. The
+sum's *effective* length does not grow with `n`. A naive `n^2` summation would
+accumulate error, but this particular `n^2` summation does not have `n^2` significant
+terms. **Kahan summation is therefore not needed**, and adding it would be
+unfalsifiable ceremony.
+
+**The recursion is the limiting side**, at `1.3e-14` relative in the worst case
+measured. It carries `B_j` forward across the whole sequence, so its error does
+propagate — damped by `exp(-beta*d_j)` at every step, which is why growth is slow and
+noisy rather than monotone.
+
+Consequences for the gate:
+
+1. **The tolerance is relative, not absolute.** `|nll|` grows roughly linearly in `n`
+   — 7205 at `n = 20000` — so an absolute `1e-12` gate would demand `1.8e-19`
+   relative and fail on correct code. At `n = 20000` the observed absolute
+   discrepancy is about `9e-11`, already a hundredfold over an absolute `1e-12`. The
+   gate is `|recursive - brute| / max(1, |brute|) <= 1e-12`.
+2. **The comparison test is bounded at `n <= 50000`.** At the measured worst case of
+   `1.3e-14` relative for `n = 20000`, and with the error growing no faster than
+   `sqrt(n)`, `n = 50000` predicts about `2e-14` — roughly 50x inside the gate.
+   Reaching `1e-12` would need `n` of order `10^8`, which no test will run. The bound
+   exists so the claim is checked rather than assumed, not because failure is near.
+3. **This argument is specific to a geometrically decaying kernel.** If a heavy-tailed
+   kernel is ever added — power-law is out of scope for v0.1.0 (CLAUDE.md §8) — the
+   effective-length argument fails, the brute force becomes the limiting side, and
+   both the bound and the no-Kahan conclusion must be re-derived. Recorded here so
+   that whoever adds one finds the reasoning rather than the conclusion.
 
 ## 6. Edge cases
 
@@ -346,6 +433,30 @@ accumulation.
    confirms it holds at machine precision on all six committed fixtures across all 24
    parameter points, 18 of which have `alpha != 0`; Part B step 9 confirms it with
    `hawk`'s own implementation.
+
+   **The identity also survives exact ties**, which was not obvious and was checked
+   rather than assumed (`benchmarks/docker/tie_identity.py`). The concern was that
+   `tick` might resolve ties by array index — the textbook recursion (4.2) — in which
+   case the identity would have to break on tied data and the break would not be a
+   defect. It does not. Comparing `tick` against both semantics:
+
+   | case | delta, time-based (ours) | delta, index-based |
+   | --- | --- | --- |
+   | no ties | 0.0 | 0.0 |
+   | one tied pair | 0.0 | 3.9e-1 |
+   | triple tie | -1.8e-15 | 1.1e0 |
+   | ties at both ends | -8.9e-16 | 8.3e-1 |
+   | bivariate, cross-component tie | -1.8e-15 | n/a |
+
+   `tick` resolves ties by **time**, matching §4.2's grouped recursion. Note this does
+   not contradict experiment E3a, where three orderings of the same three timestamps
+   gave three different losses: that experiment used *distinct* timestamps and shows
+   `tick` requires sorted input. Among *equal* timestamps there is no order to get
+   wrong.
+
+   So a tied fixture may be added to the corpus without the differential test being
+   expected to fail. What a tied fixture would **not** validate is the statistical
+   interpretation — see §3.1.
 
 ## 8. Numerical check run during Part A
 
