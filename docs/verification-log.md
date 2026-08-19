@@ -362,6 +362,45 @@ Sabotage patches must be confirmed to have landed before their result is believe
 natural-space check is blind to it by construction, which is exactly why the
 derivation requires the finite-difference check to run in both parametrizations.
 
+## Harness 7 — the simulator and the compensator (step 6)
+
+`hawk/tests/simulator.rs`. The two CLAUDE.md §3 oracles that could not exist before
+there was a simulator.
+
+### S17 — an accepted event does not update the excitation state
+
+`excitation += 1.0` -> `excitation += 0.0`, which turns the simulator into a
+homogeneous Poisson process at rate `mu` while leaving everything else intact.
+
+**RED on both oracles.** The realization still looks like a point process, is still
+sorted, still lies in the window, and still has no ties — the structural tests all
+pass. Only the two statistical oracles notice.
+
+### S18 — the thinning bound is wrong
+
+Halved the bound, so it no longer dominates the intensity and thinning rejects too
+much.
+
+**RED on both oracles.** Reverted; green.
+
+### S19 — the compensator drops its counting term
+
+`mu*t + alpha*(m_j - B_j)` -> `mu*t + alpha*(-B_j)`, leaving the simulator untouched.
+
+**RED on the residual test, green on the mean-intensity test.** This is the asymmetry
+that justifies having oracle 2 at all. The mean intensity depends only on the
+simulator, so a compensator that is wrong on its own is invisible to it. Time
+rescaling checks the simulator and the compensator *against each other*, and catches
+exactly the bug that the cheaper oracle cannot see.
+
+### Negative control, permanent
+
+`the_ks_test_rejects_residuals_from_the_wrong_parameters` is in the suite rather than
+in this log: it rescales a correct realization with a deliberately wrong branching
+ratio and asserts the KS statistic exceeds the critical value. A statistical test that
+has never rejected is not known to have power, and unlike an exact comparison its
+power is not obvious by inspection.
+
 ## Summary
 
 | ID | Harness | What was broken | Result |
@@ -383,6 +422,9 @@ derivation requires the finite-difference check to run in both parametrizations.
 | S14 | gradient | `beta*Bp_j` dropped from (G.4) | RED |
 | S15 | gradient | `Bp_j` computed from the pre-update state | RED |
 | S16 | gradient | chain-rule factor dropped from (G.8) | RED in log space only |
+| S17 | simulator | accepted event does not excite (becomes Poisson) | RED on both oracles |
+| S18 | simulator | thinning bound halved | RED on both oracles |
+| S19 | compensator | counting term dropped | RED on residuals only |
 
 Every harness has been observed both red and green. The working tree after all
 sabotages is byte-identical to before them.

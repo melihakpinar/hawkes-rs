@@ -10,8 +10,11 @@ authors.workspace = true
 
 [dependencies]
 thiserror.workspace = true
+rand.workspace = true
+rand_distr.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+rand_chacha.workspace = true
 serde.workspace = true
 serde_json.workspace = true

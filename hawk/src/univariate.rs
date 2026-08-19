@@ -313,3 +313,120 @@ pub fn negative_log_likelihood_and_gradient(
     };
     (negative_log_likelihood, gradient)
 }
+
+/// The compensator `Lambda(t_k) = int_0^{t_k} lambda(u) du`, evaluated at every event.
+///
+/// ```text
+/// Lambda(t) = mu*t + alpha * sum_{t_i < t} ( 1 - exp(-beta*(t - t_i)) )
+/// ```
+///
+/// Writing `m_j` for the number of events strictly before the distinct time `s_j` and
+/// `B_j` for the excitation state (4.4), the sum telescopes to `m_j - B_j`, so this
+/// runs in `O(n)` on the same recursion the likelihood uses.
+///
+/// Its purpose is Ogata residual analysis: by the random time change theorem
+/// [Laub2015, Theorem 4], if the parameters are correct then
+/// `{Lambda(t_1), ..., Lambda(t_n)}` is a realization of a unit-rate Poisson process,
+/// so the successive differences are i.i.d. `Exp(1)`. That is CLAUDE.md §3's oracle 2,
+/// and it validates the simulator and the intensity jointly — they cannot both be
+/// wrong in a way that still produces a unit-rate Poisson process.
+///
+/// Events at or after `t` contribute nothing: a simultaneous event gives
+/// `1 - exp(0) = 0`, so ties need no special handling here.
+pub fn compensator_at_events(parameters: &Parameters, observation: &Observation) -> Vec<f64> {
+    let mu = parameters.baseline;
+    let alpha = parameters.excitation;
+    let beta = parameters.decay;
+    let times = observation.times();
+
+    let mut compensators = Vec::with_capacity(times.len());
+    if times.is_empty() {
+        return compensators;
+    }
+
+    let mut excitation_state = 0.0f64;
+    let mut events_strictly_before = 0.0f64;
+    let mut previous_time = times[0];
+    let mut count_at_previous_time = 0.0f64;
+
+    for &time in times {
+        if time != previous_time {
+            let gap = time - previous_time;
+            excitation_state = (-beta * gap).exp() * (excitation_state + count_at_previous_time);
+            events_strictly_before += count_at_previous_time;
+            previous_time = time;
+            count_at_previous_time = 0.0;
+        }
+        compensators.push(mu * time + alpha * (events_strictly_before - excitation_state));
+        count_at_previous_time += 1.0;
+    }
+    compensators
+}
+
+/// Simulates a realization on `[0, horizon]` by Ogata's modified thinning algorithm.
+///
+/// [Laub2015, Algorithm 2]. The intensity is non-increasing between arrivals, so
+/// `lambda(t+)` — the value just after the last accepted event — bounds it until the
+/// next one, and can be used as the thinning rate `M`.
+///
+/// # Difference from the published algorithm
+///
+/// [Laub2015, Algorithm 2] obtains the bound as `lambda*(t + epsilon)` with
+/// `epsilon = 1e-10`, because it treats `lambda*` as a black box. `hawk` carries the
+/// excitation state explicitly, so the right-hand limit is available exactly:
+/// accepting an event adds `exp(0) = 1` to the state. The `epsilon` nudge is
+/// therefore unnecessary, and dropping it removes a small bias — with `epsilon > 0`
+/// the bound is evaluated slightly *after* `t` and is slightly too low, which makes
+/// the thinning accept marginally too often.
+///
+/// # Non-stationary parameters
+///
+/// No cap is imposed on the number of events. With a branching ratio `>= 1`
+/// ([`Parameters::is_stationary`]) the process is explosive and a long horizon can
+/// produce an arbitrarily large realization. That is the honest behaviour of the
+/// model rather than an error, but callers passing unvalidated parameters should
+/// check stationarity first.
+pub fn simulate(
+    parameters: &Parameters,
+    horizon: f64,
+    rng: &mut impl rand::Rng,
+) -> Result<Vec<f64>, Error> {
+    if !horizon.is_finite() || horizon <= 0.0 {
+        return Err(Error::InvalidHorizon { horizon });
+    }
+    let mu = parameters.baseline;
+    let alpha = parameters.excitation;
+    let beta = parameters.decay;
+
+    let mut times = Vec::new();
+    let mut current = 0.0f64;
+    // sum_{t_i <= current} exp(-beta*(current - t_i)), the state of the RIGHT limit,
+    // so `mu + alpha*beta*excitation` is `lambda(current+)`.
+    let mut excitation = 0.0f64;
+
+    loop {
+        // Bound for the interval starting at `current`: the intensity decays from
+        // here until the next accepted event, so this dominates it throughout.
+        let bound = mu + alpha * beta * excitation;
+
+        // Exp(bound) waiting time. `bound >= mu > 0`, so this is always finite.
+        let uniform: f64 = rng.random::<f64>();
+        let waiting = -uniform.ln() / bound;
+        let candidate = current + waiting;
+        if candidate >= horizon {
+            return Ok(times);
+        }
+
+        // Decay the state to the candidate. No event has been accepted at
+        // `candidate` yet, so this is the predictable intensity there.
+        excitation *= (-beta * waiting).exp();
+        let intensity = mu + alpha * beta * excitation;
+
+        current = candidate;
+        if rng.random::<f64>() * bound <= intensity {
+            times.push(candidate);
+            // The accepted event contributes exp(0) = 1 to the right limit.
+            excitation += 1.0;
+        }
+    }
+}
