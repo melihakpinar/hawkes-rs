@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  # A warning that is not an error is a warning that gets ignored.
+  RUSTFLAGS: -D warnings
+
+jobs:
+  check:
+    name: fmt, clippy, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # The three commands from CLAUDE.md §4 "definition of done", in that order.
+      - name: cargo fmt --check
+        run: cargo fmt --all --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: cargo test
+        run: cargo test --all-features
+
+  fixtures:
+    name: fixtures are reproducible
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Rebuilds the pinned tick oracle and regenerates every fixture, then fails if
+      # anything differs from what is committed. This is what stops a fixture from
+      # being hand-edited, or from silently drifting when the image is changed.
+      #
+      # linux/amd64 is the pinned platform (benchmarks/docker/README.md) and matches
+      # the runner, so no emulation is needed here.
+      - name: Build the tick oracle image
+        run: docker build --platform=linux/amd64 -t hawk-tick:0.8.0.2 benchmarks/docker
+
+      - name: Smoke-test the oracle
+        run: docker run --rm --platform=linux/amd64 hawk-tick:0.8.0.2
+
+      - name: Fixtures match the oracle byte-for-byte
+        run: |
+          docker run --rm --platform=linux/amd64 \
+            -v "$PWD/tests/fixtures":/out \
+            hawk-tick:0.8.0.2 \
+            python /work/generate_fixtures.py --out /out --check
