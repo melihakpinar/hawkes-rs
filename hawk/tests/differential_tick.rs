@@ -4,39 +4,45 @@
 //! `tick` image (`benchmarks/docker/`), and replays each recorded parameter point
 //! through `hawk`'s negative log-likelihood.
 //!
-//! # M0 status
+//! # What is compared
 //!
-//! `hawk` has no log-likelihood yet, so [`stub_negative_log_likelihood`] plays the
-//! recorded value back. That makes the comparison tautological on purpose: what is
-//! under test in M0 is the *harness* — fixture discovery, parsing, the sweep over
-//! every scenario and every parameter point, the tolerance, and the failure
-//! message. The stub is deleted in M1 and replaced by the real implementation.
+//! `tick`'s `loss` is neither the negative log-likelihood nor the formula in its own
+//! docstring. It is normalized by the total jump count and carries an offset. The
+//! identity under test is
 //!
-//! [`fixtures_are_internally_consistent`] is not tautological: it validates the
-//! committed corpus against facts that do not come from `hawk`.
+//! ```text
+//! hawk_nll == tick_loss * n_jumps + D*T
+//! ```
+//!
+//! which is OQ-8, closed here (M1 Part B step 9). The M0 stub that played the
+//! recorded value back is gone; this now runs `hawk`'s own implementation.
+//!
+//! `hawk` is univariate in M1, so only the univariate fixtures are compared. The
+//! multivariate ones are still parsed and structurally validated, and become
+//! comparable in M2.
+//!
+//! # Why this comes last
+//!
+//! `hawk`'s likelihood is gated against a brute-force transcription of the definition
+//! (`loglikelihood.rs`), which is itself validated against hand calculations and the
+//! Poisson degenerate case (`reference_loglikelihood.rs`). Neither uses `tick`. Only
+//! after that is `tick` brought in — otherwise using `hawk` to decide what `tick`
+//! computes, having used `tick` to decide what `hawk` should compute, would be
+//! circular.
 //!
 //! # Sabotage (CLAUDE.md §3)
 //!
-//! Confirmed to detect failure before being trusted. Perturbing
-//! [`stub_negative_log_likelihood`] by `+ 1e-6` — a thousand times the tolerance,
-//! but far too small to notice by eye in a fixture — turned
-//! `differential_against_tick` red on all 24 parameter points. Transposing the
-//! adjacency matrix in `fixture_evaluation_coeffs_use_ticks_layout` turned that test
-//! red on both asymmetric fixtures and, as expected, left the symmetric one green.
-//! Recorded in `docs/verification-log.md`.
+//! Confirmed to detect failure before being trusted, in M0 against the stub and again
+//! in M1 against the real implementation. Recorded in `docs/verification-log.md`.
 
 use std::fs;
 use std::path::PathBuf;
 
+use hawk::univariate::{Observation, Parameters, negative_log_likelihood};
 use serde::Deserialize;
 
-/// Absolute agreement required between `hawk` and `tick`.
-///
-/// CLAUDE.md §3 oracle 5 specifies 1e-9. `tick` returns `f64` and the fixtures
-/// record its shortest round-trip decimal repr, so no precision is lost in
-/// transport; 1e-9 leaves roughly six orders of magnitude of headroom over f64
-/// round-off on values of order 1, which is where these losses sit.
-const LOG_LIKELIHOOD_TOLERANCE: f64 = 1e-9;
+mod common;
+use common::computation_scale;
 
 /// Tolerance for checking that a fixture's flat `coeffs` vector agrees with its
 /// `baseline` and `adjacency` fields. Both are written by the same generator from
@@ -115,43 +121,83 @@ fn load_fixtures() -> Vec<Fixture> {
         .collect()
 }
 
-/// Stand-in for `hawk`'s negative log-likelihood. **Deleted in M1.**
+/// Absolute agreement required, converted from the relative gate below.
 ///
-/// Plays the oracle value back verbatim. Its only job is to let the harness run
-/// end to end and to go red when perturbed.
-fn stub_negative_log_likelihood(_fixture: &Fixture, evaluation: &Evaluation) -> f64 {
-    evaluation.tick_loss
-}
+/// CLAUDE.md §3 oracle 5 specifies 1e-9. Applied to the **scale of the computation**
+/// rather than to `|nll|`, for the reason given in
+/// `docs/derivations/univariate_loglikelihood.md` §5: `nll` is a difference of large
+/// terms and passes through zero, so a gate relative to it diverges on correct code
+/// wherever they cancel.
+///
+/// This is looser than the 1e-12 used against the brute force, and deliberately so.
+/// There the two sides are the same arithmetic in a different order. Here the value
+/// has crossed a language boundary, been reduced by `tick`'s own summation order,
+/// divided by `n_jumps`, printed as decimal, and multiplied back up.
+const TICK_TOLERANCE: f64 = 1e-9;
 
 #[test]
 fn differential_against_tick() {
     let fixtures = load_fixtures();
-    let mut points = 0;
+    let mut compared = 0;
+    let mut with_excitation = 0;
+    let mut tied = 0;
 
     for fixture in &fixtures {
+        if fixture.n_nodes != 1 {
+            continue; // multivariate arrives in M2
+        }
+        let times = &fixture.events[0];
+        let observation = Observation::new(times, fixture.end_time).unwrap_or_else(|e| {
+            panic!("{}: fixture violates the input contract: {e}", fixture.name)
+        });
+
         for evaluation in &fixture.evaluations {
-            let actual = stub_negative_log_likelihood(fixture, evaluation);
-            let discrepancy = (actual - evaluation.tick_loss).abs();
+            let parameters = Parameters::new(
+                evaluation.baseline[0],
+                evaluation.adjacency[0][0],
+                fixture.decay,
+            )
+            .unwrap_or_else(|e| panic!("{}: {e}", fixture.name));
+
+            let hawk_nll = negative_log_likelihood(&parameters, &observation);
+            // OQ-8: tick's loss is the negative log-likelihood ratio against a
+            // unit-rate Poisson process, divided by n_jumps. Undoing both gives the
+            // plain negative log-likelihood.
+            let from_tick = evaluation.tick_loss * (fixture.n_jumps as f64)
+                + (fixture.n_nodes as f64) * fixture.end_time;
+
+            let scale = computation_scale(&parameters, &observation);
+            let discrepancy = (hawk_nll - from_tick).abs();
             assert!(
-                discrepancy <= LOG_LIKELIHOOD_TOLERANCE,
-                "{}/{}: hawk gave {actual:?}, tick gave {:?} \
-                 (|difference| {discrepancy:?} > tolerance {LOG_LIKELIHOOD_TOLERANCE:?})",
+                discrepancy <= TICK_TOLERANCE * scale,
+                "{}/{}: hawk {hawk_nll:?} vs tick_loss*n_jumps + D*T {from_tick:?}, \
+                 |difference| {discrepancy:e} > {TICK_TOLERANCE:e} * scale {scale:e}",
                 fixture.name,
                 evaluation.label,
-                evaluation.tick_loss,
             );
-            points += 1;
+
+            compared += 1;
+            if evaluation.adjacency[0][0] != 0.0 {
+                with_excitation += 1;
+            }
+            if fixture.has_ties {
+                tied += 1;
+            }
         }
     }
 
-    // Guards against the harness silently passing because it swept nothing.
-    assert_eq!(
-        points,
-        fixtures.iter().map(|f| f.evaluations.len()).sum::<usize>()
+    // Guards against the harness passing because it swept nothing, and against the
+    // corpus losing the cases that make the comparison meaningful. OQ-8 was open
+    // precisely because M0 could only confirm the offset at `alpha == 0`.
+    assert!(compared >= 20, "only compared {compared} points");
+    assert!(
+        with_excitation >= 15,
+        "only {with_excitation} points had alpha != 0; the offset is trivially \
+         confirmed at alpha == 0 and that is what left OQ-8 open"
     );
     assert!(
-        points >= 20,
-        "expected a broad sweep, only compared {points} points"
+        tied >= 8,
+        "only {tied} tied points; ties are an independent witness"
     );
 }
 

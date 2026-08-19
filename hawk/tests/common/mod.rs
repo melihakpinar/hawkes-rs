@@ -177,3 +177,100 @@ pub fn max_relative_discrepancy(analytic: &[f64], numeric: &[f64]) -> f64 {
         .map(|(a, n)| (a - n).abs() / a.abs().max(n.abs()).max(1.0))
         .fold(0.0f64, f64::max)
 }
+
+/// Asymptotic standard errors of the maximum-likelihood estimate, from the observed
+/// Fisher information.
+///
+/// Standard MLE theory: `Var(theta_hat) ~= I(theta_hat)^-1`, where `I` is the Hessian
+/// of the negative log-likelihood at the optimum. That gives a **per-realization**
+/// predicted spread derived from theory, rather than from watching this estimator's
+/// own scatter — which would be circular, since a biased estimator has a perfectly
+/// respectable variance about its own wrong centre.
+///
+/// The Hessian is obtained by central-differencing the *analytic* gradient, which is
+/// itself gated against central differences of the likelihood in `gradient.rs`.
+///
+/// Returns `None` when the information matrix is singular or the result is not
+/// finite — for instance when `beta` is barely identified because `alpha` is small.
+pub fn asymptotic_standard_errors(
+    parameters: &Parameters,
+    observation: &Observation,
+) -> Option<[f64; 3]> {
+    let centre = [
+        parameters.baseline(),
+        parameters.excitation(),
+        parameters.decay(),
+    ];
+    // Relative step: the parameters differ in scale, so a fixed absolute step would
+    // be badly sized for at least one of them.
+    let step: Vec<f64> = centre.iter().map(|v| 1e-5 * v.max(1e-3)).collect();
+
+    let gradient_at = |point: &[f64]| -> [f64; 3] {
+        let p = Parameters::new(point[0], point[1], point[2]).expect("valid parameters");
+        let (_, g) = hawk::univariate::negative_log_likelihood_and_gradient(&p, observation);
+        [g.baseline, g.excitation, g.decay]
+    };
+
+    let mut hessian = [[0.0f64; 3]; 3];
+    for j in 0..3 {
+        let mut up = centre;
+        let mut down = centre;
+        up[j] += step[j];
+        down[j] -= step[j];
+        if down[j] <= 0.0 {
+            return None;
+        }
+        let g_up = gradient_at(&up);
+        let g_down = gradient_at(&down);
+        for i in 0..3 {
+            hessian[i][j] = (g_up[i] - g_down[i]) / (2.0 * step[j]);
+        }
+    }
+    // Symmetrize: the two mixed partials are equal in exact arithmetic and differ
+    // only by round-off here.
+    //
+    // Index loops rather than iterators: this is matrix index arithmetic, where
+    // `hessian[i][j]` against `hessian[j][i]` is the point, and clippy's iterator
+    // rewrite would hide exactly the thing a reader needs to check.
+    #[allow(clippy::needless_range_loop)]
+    for i in 0..3 {
+        for j in (i + 1)..3 {
+            let mean = 0.5 * (hessian[i][j] + hessian[j][i]);
+            hessian[i][j] = mean;
+            hessian[j][i] = mean;
+        }
+    }
+
+    let inverse = invert_3x3(&hessian)?;
+    let mut errors = [0.0f64; 3];
+    for i in 0..3 {
+        let variance = inverse[i][i];
+        if !variance.is_finite() || variance <= 0.0 {
+            return None;
+        }
+        errors[i] = variance.sqrt();
+    }
+    Some(errors)
+}
+
+fn invert_3x3(m: &[[f64; 3]; 3]) -> Option<[[f64; 3]; 3]> {
+    let determinant = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    if !determinant.is_finite() || determinant.abs() < 1e-300 {
+        return None;
+    }
+    let mut inverse = [[0.0f64; 3]; 3];
+    // Index loops for the same reason as above: the cofactor construction is defined
+    // by its indices.
+    #[allow(clippy::needless_range_loop)]
+    for i in 0..3 {
+        for j in 0..3 {
+            // Cofactor of (j, i), giving the transpose of the cofactor matrix.
+            let (r0, r1) = ((j + 1) % 3, (j + 2) % 3);
+            let (c0, c1) = ((i + 1) % 3, (i + 2) % 3);
+            inverse[i][j] = (m[r0][c0] * m[r1][c1] - m[r0][c1] * m[r1][c0]) / determinant;
+        }
+    }
+    Some(inverse)
+}

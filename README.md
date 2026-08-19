@@ -3,15 +3,16 @@
 Multivariate Hawkes processes in Rust: simulation and maximum-likelihood estimation,
 with Python bindings.
 
-> ## Pre-alpha — not yet usable
+> ## Pre-alpha — univariate only
 >
-> **`hawk` implements no algorithms yet.** There is no simulator, no likelihood and
-> no estimator. Nothing here will fit a model to your data. Do not depend on this
-> crate.
+> The univariate exponential-kernel process works: simulation, log-likelihood,
+> analytic gradient and maximum-likelihood fitting. **Multivariate is not implemented
+> yet**, there are no Python bindings yet, and the API will change. Do not depend on
+> this crate.
 >
-> What exists today is the verification machinery that the algorithms will have to
-> satisfy, built first on purpose. See [`docs/verification-log.md`](docs/verification-log.md)
-> for evidence that it detects the failures it is meant to detect.
+> Every formula traces to an approved derivation, and every oracle has been shown to
+> go red on deliberately broken code — see
+> [`docs/verification-log.md`](docs/verification-log.md).
 
 ## Why
 
@@ -28,7 +29,7 @@ written. The rules are in [`CLAUDE.md`](CLAUDE.md).
 | Milestone | Contents | State |
 | --- | --- | --- |
 | M0 | Verification infrastructure: pinned `tick` oracle, reference fixtures, differential / property / gradient harnesses, sabotage evidence | complete |
-| M1 | Univariate exponential-kernel likelihood, gradient, simulator, MLE | not started |
+| M1 | Univariate exponential-kernel likelihood, gradient, simulator, MLE | complete |
 | M2 | Multivariate, Python wheels, benchmarks against `tick` | not started |
 
 v0.1.0 is univariate and multivariate exponential-kernel Hawkes: simulation, MLE,
@@ -54,14 +55,17 @@ tests/fixtures/     committed reference data from tick
 Three of CLAUDE.md's five oracles are live. Each has been observed failing on
 deliberately broken code before being trusted:
 
-- **Differential test against `tick`** — six committed scenarios, four parameter
-  points each, agreeing to `1e-9`.
-- **Round-trip property test** — `proptest` over stationary parameters.
-- **Finite-difference gradient check** — central differences against closed-form
-  gradients; a wrong derivative still converges, to the wrong place, and nothing else
-  catches it.
-
-The analytic-identity and time-rescaling oracles arrive with the simulator in M1.
+- **Brute-force reference** — the `O(n^2)` definition, validated against hand
+  calculations and the Poisson closed form. The `O(n)` recursion is gated against it.
+- **Differential test against `tick`** — ten committed scenarios, four parameter
+  points each.
+- **Round-trip property test** — simulate, fit, recover, with the tolerance derived
+  per realization from the observed Fisher information.
+- **Finite-difference gradient check** — a wrong derivative still converges, to the
+  wrong place, and nothing else catches it. `tick` cannot check `d/dbeta` at all.
+- **Analytic identity** — the stationary mean intensity `mu/(1-alpha)`.
+- **Time-rescaling residuals** — KS-tested against `Exp(1)`. Validates the simulator
+  and the compensator jointly, and catches compensator bugs the other oracles miss.
 
 ### Running
 

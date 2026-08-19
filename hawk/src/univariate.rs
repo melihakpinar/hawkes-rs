@@ -430,3 +430,209 @@ pub fn simulate(
         }
     }
 }
+
+/// Outcome of a maximum-likelihood fit.
+#[derive(Debug, Clone)]
+pub struct Fit {
+    /// The fitted parameters.
+    pub parameters: Parameters,
+    /// Negative log-likelihood at the optimum.
+    pub negative_log_likelihood: f64,
+    /// Iterations the optimizer took.
+    pub iterations: u64,
+    /// Whether the fit is at a stationary point of the objective.
+    ///
+    /// Determined by measuring the gradient at the result, not by asking the
+    /// optimizer whether it thinks it finished. Those differ: a line search that
+    /// fails on its first trial step makes L-BFGS return its own starting point after
+    /// one iteration, which is indistinguishable from success if the only question
+    /// asked is "did it stop before the iteration cap?".
+    ///
+    /// A `false` here is a warning about the fit, not an error: the parameters are
+    /// still the best point found, and the caller can decide what to do about it.
+    pub converged: bool,
+
+    /// Infinity norm of the per-event log-space gradient at the result, the quantity
+    /// [`Fit::converged`] thresholds.
+    pub gradient_norm: f64,
+}
+
+impl Fit {
+    /// Branching ratio of the fitted parameters, reported as a **diagnostic**.
+    ///
+    /// Stationarity is not enforced during optimization (CLAUDE.md §6). A fitted
+    /// branching ratio at or above 1 is a real finding about the data — the sample
+    /// looks explosive — and not an error to be suppressed. Check it.
+    pub fn branching_ratio(&self) -> f64 {
+        self.parameters.branching_ratio()
+    }
+
+    /// Whether the fitted process is stationary. See [`Fit::branching_ratio`].
+    pub fn is_stationary(&self) -> bool {
+        self.parameters.is_stationary()
+    }
+}
+
+/// Maximum-likelihood fit by L-BFGS in log-parameter space.
+///
+/// # Parametrization
+///
+/// The optimizer works on `(ln mu, ln alpha, ln beta)`, so positivity holds by
+/// construction and no constrained solver is needed (CLAUDE.md §6). Conversion
+/// happens at the boundary via (G.8).
+///
+/// # Stationarity
+///
+/// Not enforced. The optimizer may pass through, and settle at, a branching ratio
+/// above 1. See [`Fit::branching_ratio`].
+///
+/// # On tied data
+///
+/// This is still the minimizer of the objective, but it is not a maximum-likelihood
+/// estimator in the sense the asymptotic theory requires, because on tied data the
+/// objective is not a likelihood ([Laub2015, Theorem 3] is stated for a *simple*
+/// point process). See `docs/derivations/univariate_loglikelihood.md` §3.1. The
+/// numbers are still the numbers; the guarantees are not.
+pub fn fit(observation: &Observation) -> Result<Fit, Error> {
+    use argmin::core::{CostFunction, Executor, Gradient as ArgminGradient, State};
+    use argmin::solver::linesearch::MoreThuenteLineSearch;
+    use argmin::solver::quasinewton::LBFGS;
+
+    // Three parameters cannot be identified from a handful of events. The bound is
+    // deliberately low: it rejects the degenerate cases where the objective has no
+    // interior optimum at all, and leaves "few events give a poor fit" to the caller,
+    // since that is a question about precision rather than about validity.
+    if observation.len() < 3 {
+        return Err(Error::insufficient_data(observation.len()));
+    }
+
+    struct Problem<'a, 'b> {
+        observation: &'a Observation<'b>,
+        /// The objective is divided by the event count, so the optimizer minimizes
+        /// the negative log-likelihood **per event**.
+        ///
+        /// This is a scaling choice, not a modelling one: the minimizer is identical.
+        /// It matters because the gradient of the unnormalized objective grows
+        /// linearly in `n` — around 800 for a 16000-event realization — and a line
+        /// search whose first trial step is 1 then leaps a vast distance in log
+        /// space, where `exp` promptly overflows. The search fails on its first
+        /// iteration and L-BFGS returns its starting point, which looks exactly like
+        /// convergence. `tick` normalizes its loss by the jump count for the same
+        /// reason (`conventions.md` C7).
+        scale: f64,
+    }
+
+    impl Problem<'_, '_> {
+        fn parameters(&self, log_parameters: &[f64]) -> Parameters {
+            // exp() of a finite f64 is >= 0; the only way to reach 0 is underflow at
+            // about -745, which the line search does not visit in practice. Falling
+            // back keeps the closure total rather than panicking inside the solver.
+            Parameters::new(
+                log_parameters[0].exp(),
+                log_parameters[1].exp(),
+                log_parameters[2].exp(),
+            )
+            .unwrap_or(Parameters {
+                baseline: f64::MIN_POSITIVE,
+                excitation: f64::MIN_POSITIVE,
+                decay: f64::MIN_POSITIVE,
+            })
+        }
+    }
+
+    impl CostFunction for Problem<'_, '_> {
+        type Param = Vec<f64>;
+        type Output = f64;
+
+        fn cost(&self, log_parameters: &Self::Param) -> Result<f64, argmin::core::Error> {
+            Ok(
+                negative_log_likelihood(&self.parameters(log_parameters), self.observation)
+                    / self.scale,
+            )
+        }
+    }
+
+    impl ArgminGradient for Problem<'_, '_> {
+        type Param = Vec<f64>;
+        type Gradient = Vec<f64>;
+
+        fn gradient(&self, log_parameters: &Self::Param) -> Result<Vec<f64>, argmin::core::Error> {
+            let parameters = self.parameters(log_parameters);
+            let (_, gradient) = negative_log_likelihood_and_gradient(&parameters, self.observation);
+            let log_gradient = gradient.to_log_parameter_space(&parameters);
+            Ok(vec![
+                log_gradient.baseline / self.scale,
+                log_gradient.excitation / self.scale,
+                log_gradient.decay / self.scale,
+            ])
+        }
+    }
+
+    // Starting point. The observed event rate is n/T; splitting it evenly between
+    // baseline and excitation gives `mu = rate/2` with `alpha = 0.5`, whose
+    // stationary mean intensity `mu/(1-alpha)` is exactly `rate` -- so the initial
+    // guess already reproduces the first moment. `beta` starts at the reciprocal of
+    // the mean inter-arrival time, which is the only timescale in the data.
+    let horizon = observation.horizon();
+    let rate = observation.len() as f64 / horizon;
+    let mean_interarrival = horizon / observation.len() as f64;
+    let start = vec![
+        (0.5 * rate).ln(),
+        0.5f64.ln(),
+        (1.0 / mean_interarrival).ln(),
+    ];
+
+    let line_search = MoreThuenteLineSearch::new()
+        .with_c(1e-4, 0.9)
+        .map_err(|e| Error::OptimizerFailed {
+            message: e.to_string(),
+        })?;
+    // Seven correction pairs is argmin's usual default and is far more history than a
+    // three-parameter problem can use; L-BFGS here is effectively BFGS.
+    let solver = LBFGS::new(line_search, 7)
+        .with_tolerance_grad(1e-10)
+        .map_err(|e| Error::OptimizerFailed {
+            message: e.to_string(),
+        })?;
+
+    let problem = Problem {
+        observation,
+        scale: observation.len() as f64,
+    };
+    let result = Executor::new(problem, solver)
+        .configure(|state| state.param(start).max_iters(500))
+        .run()
+        .map_err(|e| Error::OptimizerFailed {
+            message: e.to_string(),
+        })?;
+
+    let state = result.state();
+    let best = state
+        .get_best_param()
+        .ok_or_else(|| Error::OptimizerFailed {
+            message: "optimizer returned no parameters".to_owned(),
+        })?;
+    let parameters = Parameters::new(best[0].exp(), best[1].exp(), best[2].exp())?;
+    let negative_log_likelihood = negative_log_likelihood(&parameters, observation);
+
+    // Measure convergence rather than infer it. See `Fit::converged`.
+    let (_, gradient) = negative_log_likelihood_and_gradient(&parameters, observation);
+    let log_gradient = gradient.to_log_parameter_space(&parameters);
+    let events = observation.len() as f64;
+    let gradient_norm = (log_gradient.baseline / events)
+        .abs()
+        .max((log_gradient.excitation / events).abs())
+        .max((log_gradient.decay / events).abs());
+
+    Ok(Fit {
+        parameters,
+        negative_log_likelihood,
+        iterations: state.get_iter(),
+        // Threshold on the per-event gradient, so it does not tighten as the sample
+        // grows. 1e-6 is far below the sampling noise in the parameters themselves --
+        // the standard errors are orders of magnitude larger -- so a fit that meets
+        // it is at the optimum for every practical purpose.
+        converged: gradient_norm < 1e-6,
+        gradient_norm,
+    })
+}

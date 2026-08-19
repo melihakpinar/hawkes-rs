@@ -49,4 +49,21 @@ pub enum Error {
     /// (`docs/derivations/conventions.md` C5).
     #[error("the observation horizon must be strictly positive and finite, got {horizon}")]
     InvalidHorizon { horizon: f64 },
+
+    /// Fitting needs events. With none, the likelihood is monotone decreasing in
+    /// `mu` and has no interior maximum, and `alpha` and `beta` do not appear in it
+    /// at all.
+    #[error("cannot fit: {events} events is not enough to identify three parameters")]
+    InsufficientData { events: usize },
+
+    /// The optimizer failed outright, as opposed to stopping without converging.
+    #[error("the optimizer failed: {message}")]
+    OptimizerFailed { message: String },
+}
+
+impl Error {
+    /// Not enough data to identify the parameters.
+    pub(crate) fn insufficient_data(events: usize) -> Self {
+        Error::InsufficientData { events }
+    }
 }

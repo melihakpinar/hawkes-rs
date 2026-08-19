@@ -12,6 +12,8 @@ authors.workspace = true
 thiserror.workspace = true
 rand.workspace = true
 rand_distr.workspace = true
+argmin-math = { version = "0.5.1", features = ["vec"] }
+argmin = { version = "0.11", default-features = false }
 
 [dev-dependencies]
 proptest.workspace = true

@@ -401,6 +401,46 @@ ratio and asserts the KS statistic exceeds the critical value. A statistical tes
 has never rejected is not known to have power, and unlike an exact comparison its
 power is not obvious by inspection.
 
+## Harness 8 — the fit and the `tick` identity (steps 9 and 10)
+
+### S20 — perturb the fitted baseline by 5%
+
+**RED** on both the round-trip property test and `the_fit_actually_optimizes`. Worth
+recording what 5% means here: the round-trip tolerance is expressed in standard
+errors, and on these samples a 5% shift in the baseline is tens of them. The tolerance
+is generous in units of noise and unforgiving of bias, which is the intent.
+
+### S21 — drop the per-event normalization of the objective
+
+`scale: observation.len() as f64` -> `scale: 1.0`.
+
+**RED** on the round-trip test. This sabotage reproduces a bug that was actually
+present during development, and it is the reason `Fit::converged` measures the
+gradient instead of asking the optimizer: the unnormalized objective has a log-space
+gradient of order `n`, so the line search's first trial step overflows `exp`, L-BFGS
+gives up after one iteration and returns its own starting point. With `converged`
+defined as "stopped before the iteration cap" that state reported success, with a
+result 730 nats worse than the true parameters. The fix was to optimize the
+likelihood per event, which is why `tick` normalizes by the jump count too.
+
+### S22 — drop the `D*T` term from the OQ-8 identity
+
+**RED**, and by exactly `2000.0` on `univariate_large`, whose horizon is 2000. The
+offset is not a fitted constant; it is `int_0^T sum_i 1 dt`, and the test measures it
+rather than accommodating it.
+
+## A note on sabotage technique
+
+Two sabotage patches in M1 (S15, S22) silently failed to apply because `rustfmt` had
+reformatted the anchor line, and both runs reported every test green. A sabotage that
+does not land is indistinguishable from an oracle that does not work, and the
+indistinguishable direction is the dangerous one — it reads as "the oracle is broken"
+when the truth is "nothing was broken".
+
+Later sabotage runs assert that the patch applied and that its anchor is unique before
+believing any result. Any sabotage recorded in this file without that confirmation
+should be re-run before it is trusted.
+
 ## Summary
 
 | ID | Harness | What was broken | Result |
@@ -425,6 +465,9 @@ power is not obvious by inspection.
 | S17 | simulator | accepted event does not excite (becomes Poisson) | RED on both oracles |
 | S18 | simulator | thinning bound halved | RED on both oracles |
 | S19 | compensator | counting term dropped | RED on residuals only |
+| S20 | fit | fitted baseline perturbed by 5% | RED |
+| S21 | fit | per-event normalization dropped | RED |
+| S22 | differential | `D*T` term dropped from the OQ-8 identity | RED, by exactly `T` |
 
 Every harness has been observed both red and green. The working tree after all
 sabotages is byte-identical to before them.
