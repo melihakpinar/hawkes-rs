@@ -5,11 +5,11 @@
     ]
   ],
   "baseline": [
-    0.4
+    0.5
   ],
-  "decay": 1.0,
-  "description": "Univariate, ~10 events. Small enough to check by hand.",
-  "end_time": 20.0,
+  "decay": 0.8,
+  "description": "Hand-built, a three-way tie. A grouping bug that survives a pair because it happens to double-count once will not survive a triple.",
+  "end_time": 8.0,
   "evaluations": [
     {
       "adjacency": [
@@ -18,18 +18,18 @@
         ]
       ],
       "baseline": [
-        0.4
+        0.5
       ],
       "coeffs": [
-        0.4,
+        0.5,
         0.3
       ],
       "label": "truth",
       "tick_grad": [
-        -0.08754888935523875,
-        -0.21750229952873582
+        -0.4270011830879359,
+        0.539036792499733
       ],
-      "tick_loss": -0.18928042966778857
+      "tick_loss": 0.17711506933096163
     },
     {
       "adjacency": [
@@ -38,18 +38,18 @@
         ]
       ],
       "baseline": [
-        0.68
+        0.85
       ],
       "coeffs": [
-        0.68,
+        0.85,
         0.3
       ],
       "label": "baseline_scaled_up",
       "tick_grad": [
-        0.43924354979229535,
-        0.10604457103251319
+        0.24576148568594408,
+        0.6865995001318873
       ],
-      "tick_loss": -0.12996012123702183
+      "tick_loss": 0.16422538083364704
     },
     {
       "adjacency": [
@@ -58,18 +58,18 @@
         ]
       ],
       "baseline": [
-        0.4
+        0.5
       ],
       "coeffs": [
-        0.4,
+        0.5,
         0.12
       ],
       "label": "adjacency_scaled_down",
       "tick_grad": [
-        -0.4812173425383797,
-        -0.6532532666180451
+        -0.5603469152611023,
+        0.49548030094109885
       ],
-      "tick_loss": -0.11528760344782449
+      "tick_loss": 0.08385365648746594
     },
     {
       "adjacency": [
@@ -78,49 +78,42 @@
         ]
       ],
       "baseline": [
-        0.24
+        0.3
       ],
       "coeffs": [
-        0.24,
+        0.3,
         0.44999999999999996
       ],
       "label": "both_scaled",
       "tick_grad": [
-        -0.42732256513627276,
-        -0.22598690358782844
+        -1.1923226127891455,
+        0.4000276736570476
       ],
-      "tick_loss": -0.18519196591339726
+      "tick_loss": 0.40081975835020717
     }
   ],
   "events": [
     [
-      6.173810259392609,
-      10.970943091392193,
-      11.307815575836115,
-      11.655885436944137,
-      12.3406216783892,
-      13.799602808592354,
-      14.214383626848514,
-      14.467876052445442,
-      14.948006992224414,
-      16.043054573348055,
-      16.17213943476666,
-      17.26014921539542,
-      19.413853388446324
+      0.5,
+      2.0,
+      2.0,
+      2.0,
+      4.0,
+      6.5
     ]
   ],
   "generator": {
     "numpy_version": "2.5.2",
-    "origin": "simulated",
+    "origin": "hand-built",
     "python_version": "3.13.5",
     "script": "benchmarks/docker/generate_fixtures.py",
-    "seed": 20240001,
+    "seed": null,
     "tick_version": "0.8.0.2"
   },
-  "has_ties": false,
-  "n_jumps": 13,
+  "has_ties": true,
+  "n_jumps": 6,
   "n_nodes": 1,
-  "name": "univariate_tiny",
+  "name": "univariate_tied_triple",
   "schema_version": 2,
   "spectral_radius": 0.3,
   "tick_loss_convention": "negative log-likelihood ratio w.r.t. unit-rate Poisson, divided by n_jumps; see docs/open-questions.md OQ-8"

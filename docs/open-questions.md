@@ -184,7 +184,7 @@ by about 9% on a four-event example.
 
 ---
 
-## OQ-8 — Is `tick`'s loss offset parameter-independent? · OPEN (candidate (a) confirmed by independent evidence; formal closure in M1 Part B step 9)
+## OQ-8 — Is `tick`'s loss offset parameter-independent? · RESOLVED (M1 Part B)
 
 **Question.** `tick`'s `ModelHawkesExpKernLogLik.loss` is not its documented formula.
 Measured at `adjacency == 0`:
@@ -248,19 +248,34 @@ does not affect the evidence above; it means a tied fixture *may* be added later
 without the differential test being expected to break. Recorded because the opposite
 assumption is the natural one and would send someone hunting in the wrong place.
 
-**Left OPEN deliberately.** M1's plan closes this at Part B step 9 with `hawk`'s own
-implementation, after that implementation has been validated against non-`tick`
-oracles. The Python reference above shares an author with the derivation and has not
-been sabotage-tested; it is evidence, not the verdict. Nothing is expected to change,
-but the entry stays open until the planned test runs.
+**RESOLVED: candidate (a).** The identity
 
-**How it gets closed.** The differential harness
-(`hawk/tests/differential_tick.rs`) already replays every fixture at four parameter
-points each, including three with `adjacency != 0`. The moment M1 lands a
-log-likelihood, that harness decides this question. Until it is closed, **no
-absolute log-likelihood comparison against `tick` may be trusted**; only differences
-of the loss at two parameter points on the same data are safe, since the offset
-cancels.
+```
+hawk_nll == tick_loss * n_jumps + D*T
+```
+
+holds exactly. `hawk/tests/differential_tick.rs` now runs `hawk`'s own
+log-likelihood against every univariate fixture at every recorded parameter point,
+and asserts the identity to `1e-9` relative to the computation scale. The test
+additionally requires at least 15 of the compared points to have `alpha != 0` and at
+least 8 to contain ties, so it cannot pass on the degenerate cases alone — which is
+precisely what left this question open in M0.
+
+**The argument is not circular.** `hawk`'s likelihood was gated first against a
+brute-force transcription of the definition, which was itself validated against hand
+calculations and the Poisson closed form, neither of which involves `tick`. Only then
+was `tick` brought in. Had the order been reversed, `tick` would have been used to
+decide what `hawk` computes and `hawk` used to decide what `tick` computes.
+
+**Sabotage (S22).** Dropping the `D*T` term turns the test red by exactly `2000.0` on
+`univariate_large`, whose horizon is 2000 — the offset is not a fitted constant, it is
+`int_0^T sum_i 1 dt`, and the test measures it.
+
+**Consequence, now positive.** Absolute log-likelihood comparison against `tick` is
+trustworthy. Benchmarks may compare likelihood values directly, provided they apply
+the conversion; they are not restricted to differences at two parameter points on the
+same data. The conversion is not optional: `tick`'s raw `loss` differs from a negative
+log-likelihood by both a factor of `n_jumps` and the `D*T` offset.
 
 ---
 
