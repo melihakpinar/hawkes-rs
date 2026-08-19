@@ -1,0 +1,37 @@
+# Fully pinned closure for the `tick` oracle environment.
+#
+# Installed with `pip install --no-deps`, so this list is the COMPLETE transitive
+# closure, not a top-level spec. It was produced by resolving `tick==0.8.0.2` on
+# linux/amd64 + CPython 3.13.5 and recording `pip freeze` (see README.md).
+#
+# numpydoc is NOT optional despite `tick` declaring it only under the `docs` extra.
+# tick's metaclass (tick/base/base.py:262-264, 306-313) registers an attribute as
+# settable only if it can parse it out of the class docstring via
+# `numpydoc.docscrape`. With numpydoc absent, `docscrape` is None, no documented
+# attribute is registered, and every model class raises
+# `AttributeError: object has no settable attribute 'dtype'` on construction.
+# See docs/open-questions.md OQ-9.
+tick==0.8.0.2
+numpydoc==1.9.0
+
+# tick runtime dependencies
+numpy==2.5.2
+scipy==1.18.0
+pandas==3.0.5
+scikit-learn==1.9.0
+matplotlib==3.11.1
+dill==0.4.1
+packaging==26.3
+
+# transitive dependencies of the above
+contourpy==1.3.3
+cycler==0.12.1
+fonttools==4.63.0
+joblib==1.5.3
+kiwisolver==1.5.0
+narwhals==2.24.0
+pillow==12.3.0
+pyparsing==3.3.2
+python-dateutil==2.9.0.post0
+six==1.17.0
+threadpoolctl==3.6.0
