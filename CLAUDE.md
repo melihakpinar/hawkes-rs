@@ -143,6 +143,13 @@ five exist; use them. Adding a feature means adding to them.
 the code it guards, confirm the test goes red, then revert. An oracle that has never
 gone red is not known to be an oracle. Note the sabotage in the test's doc comment.
 
+**Fixed-seed single cases cannot see size-dependent defects.** A test pinned to one
+seed exercises one realization; a defect whose trigger scales with `n` — gradient
+magnitude, accumulated error, overflow in a line search — is structurally invisible to
+it. Randomized sweeps are not a nicety here, they are the only thing that covers this
+class. Every single-case test must be accompanied by a randomized one over the same
+code path.
+
 **Do not write a test whose expected value you computed with the code under test.**
 Expected values come from a paper, from `tick`, or from an independent hand
 calculation recorded in `docs/derivations/`.
