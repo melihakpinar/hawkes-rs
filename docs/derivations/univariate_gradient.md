@@ -4,7 +4,14 @@ Status: **awaiting owner approval.** Per CLAUDE.md §4 no implementation may pro
 until this is approved.
 
 Companion to `univariate_loglikelihood.md`. All notation, conventions and citations
-are inherited from it; equation numbers of the form `(4.4)` refer to that document.
+are inherited from it; equation numbers of the form `(4.4)` refer to that document,
+and **§1.1's reparametrization `alpha_L = alpha*beta` applies here too**.
+
+[Laub2015] §4.2 records that *"Ozaki [8] also gives the partial derivatives and the
+Hessian for this log-likelihood function"*, and that each derivative is computable in
+`O(k)` by a recursion similar to eq. 20 — which is (G.6) below. It does not reproduce
+the partials, so they are derived here from [Laub2015, eq. 21] rather than quoted,
+and [Ozaki1979] is credited for provenance only (no PDF; CLAUDE.md §2).
 
 A wrong derivative still converges — to the wrong place. Oracle 4 (finite
 differences) is the only thing that catches it, which is why every partial below is
@@ -221,6 +228,12 @@ in natural parameters would not see it.
 
 The `1e-6` tolerance is the M0 gradient harness's, justified there from the central
 difference's own round-off floor. It is not tuned to make anything pass.
+
+One more independent check is available for `d/dbeta` and should be used, since
+`tick` cannot supply one. [Laub2015, eq. 6] gives the stationary mean intensity
+`mu/(1 - alpha)`, which is free of `beta`. Fitting long stationary simulations must
+therefore recover `mu` and `alpha` without `beta` absorbing their error — a wrong
+`d/dbeta` that still converges tends to show up as a biased `alpha`.
 
 ## 8. Numerical check run during Part A
 

@@ -16,6 +16,32 @@ Source paths are relative to `site-packages/tick` in the pinned image
 
 ## C1. Kernel normalization
 
+> **The literature disagrees with `tick` here, and the disagreement is exactly the
+> CLAUDE.md §1.3 hazard.** [Laub2015, eq. 4] writes the exponential-kernel intensity
+> as
+>
+> ```
+> lambda*(t) = lambda + sum_{t_i < t} alpha_L * exp(-beta*(t - t_i))
+> ```
+>
+> — the `alpha*exp(-beta t)` branch — while `tick` uses `alpha*beta*exp(-beta t)`.
+> Both are in print; neither is wrong; they are different parametrizations of the
+> same family. The map between them is
+>
+> ```
+> alpha_Laub = alpha_tick * beta          alpha_tick = alpha_Laub / beta
+> ```
+>
+> **`hawk` uses `tick`'s parametrization.** CLAUDE.md §2 makes `tick`'s source the
+> tiebreaker for conventions, because differential tests against it are the strongest
+> oracle available, and matching it means the differential test compares numbers
+> directly rather than through a reparametrization that could itself be wrong.
+>
+> Every citation to [Laub2015] in this repository is therefore accompanied by the
+> substitution `alpha_L -> alpha*beta`. `docs/derivations/univariate_loglikelihood.md`
+> §1.1 states it once, explicitly, and every later equation reference assumes it.
+
+
 ```
 phi_ij(t) = alpha_ij * beta_ij * exp(-beta_ij * t) * 1_{t > 0}
 ```
@@ -89,6 +115,19 @@ adjacency matrix, and stationarity requires
 spectral_radius(alpha) < 1
 ```
 
+[Laub2015, eq. 5] gives the branching ratio as `n = int_0^inf alpha_L*exp(-beta s) ds
+= alpha_L/beta`. Substituting `alpha_L = alpha*beta` (C1) gives `n = alpha`, agreeing
+with `tick`.
+
+[Laub2015, eq. 6] gives the stationary mean intensity in the defective case `n < 1`:
+
+```
+E[lambda*(t)] -> lambda / (1 - n)   as t -> infinity
+```
+
+which in `hawk`'s parametrization is `mu / (1 - alpha)`. This is CLAUDE.md §3's
+oracle 1 and is the analytic identity long simulations must converge to.
+
 Confirmed empirically: `SimuHawkesExpKernels(adjacency=[[0.2]], decays=[[1.5]], ...)`
 reports `spectral_radius() == 0.2`, independent of the decay. A decay-dependent value
 (e.g. `alpha/beta = 0.1333`) would indicate the other normalization. Reproduce with
@@ -102,9 +141,10 @@ Strict inequality: only events **strictly before** `t` contribute.
 lambda_i(t) = mu_i + sum_{j=1}^{D} sum_{t_k^j < t} phi_ij(t - t_k^j)
 ```
 
-Source: `hawkes/model/model_hawkes_expkern_loglik.py:31-33`, which writes
-`\sum_{t_k^j < t}`. Same formula in
-`hawkes/inference/base/learner_hawkes_param.py:29`.
+Sources agree. [Laub2015, eq. 4] writes the sum as `sum_{t_i < t}`, strictly. So does
+`tick`: `hawkes/model/model_hawkes_expkern_loglik.py:31-33` writes `\sum_{t_k^j < t}`,
+and the same formula appears in `hawkes/inference/base/learner_hawkes_param.py:29`.
+This is one of the few points where the paper and `tick` do not need reconciling.
 
 This is the choice that keeps the intensity predictable (left-continuous), so the
 intensity at the very first event is `mu_i`.
@@ -135,6 +175,14 @@ E3b gives a second, independent confirmation using tied timestamps — see C8.
 ## C4. Compensator on the tail
 
 The compensator integral runs to the observation horizon `T`, not to the last event.
+
+**[Laub2015] shows both forms, which is why this needs care.** Theorem 3 states the
+likelihood with the compensator integrated over the full observation window `[0, T]`.
+But eq. 18-21, the ones that get transcribed, are written for the horizon `t_k` — the
+*last event* — because §4.2 derives them for a process "observed up to the time of the
+kth arrival". Taking eq. 21 at face value for a caller-supplied `T > t_k` silently
+drops `int_{t_k}^{T} lambda*(u) du`, which is exactly the error this hazard names.
+`hawk` uses the general-`T` form; see `univariate_loglikelihood.md` §2.
 
 Empirically pinned. With `adjacency == 0` the intensity is constant at `mu_i`, so the
 compensator term is linear in `mu_i` with slope equal to the integration length. The

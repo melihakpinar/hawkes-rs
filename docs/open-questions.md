@@ -310,27 +310,47 @@ oracle makes the differential tests stronger, not weaker.
 
 ---
 
-## OQ-11 — Reference PDFs are absent, so equations cannot be cited by number · OPEN
+## OQ-11 — Reference PDFs are absent, so equations cannot be cited by number · RESOLVED (M1 Part A)
 
 **Question.** CLAUDE.md §2 requires papers to be cited by equation number
-(`[Ozaki1979, eq. 7]`). `docs/references/` contains only a README: the PDFs are under
-publisher copyright and are not committed, and I do not have them.
+(`[Ozaki1979, eq. 7]`), but `docs/references/` contained only a README. No equation
+number could be cited without inventing one, which would be exactly the
+fabricated-source failure §1 exists to prevent.
 
-**What was done instead.** `docs/derivations/univariate_loglikelihood.md` and
-`univariate_gradient.md` are written to be **self-contained**: every step is shown,
-so both are checkable line by line without any paper. [Ozaki1979] is named for
-provenance of the recursion technique, without an equation number, and §0 of the
-log-likelihood derivation says so explicitly rather than burying it.
+**Resolution.** The repository owner amended CLAUDE.md §2 and added
+`docs/references/1507.02822v1.pdf`: Laub, Taimre & Pollett (2015), *Hawkes
+Processes*, arXiv:1507.02822v1. Citations must now resolve to an equation in a
+**freely accessible** source, with [Laub2015] as the primary citable reference and
+the original papers cited alongside for provenance, without equation numbers unless
+a PDF is present.
 
-**What was not done.** No equation number was invented. Citing `[Ozaki1979, eq. 7]`
-without having read equation 7 would be precisely the fabricated-source failure
-CLAUDE.md §1 exists to prevent, and it would be undetectable by a later reader.
+Both derivations now cite by equation number: eq. 4 (intensity, strict bounds), eq. 5
+(branching ratio), eq. 6 (stationary mean intensity), Theorem 3 (likelihood on
+`[0, T]`), eq. 17 (log-likelihood), eq. 18 (compensator), eq. 19 (`O(n^2)` form),
+eq. 20 (Ozaki recursion), eq. 21 (`O(n)` form). [Ozaki1979] remains provenance-only,
+which §2 now explicitly permits; everything credited to it is reproduced in
+[Laub2015] with numbers.
 
-**Resolution path.** Obtain the PDFs listed in `docs/references/README.md`, place
-them there, and fill in the equation numbers in both derivations. Purely an audit-trail
-task: the mathematics is independently verified by
-`docs/derivations/check_univariate_derivation.py` and, from Part B, by the Rust
-oracles.
+**Two things the paper changed, neither of them cosmetic.**
 
-**Needs the repository owner** — obtaining copyrighted PDFs is not something this
-agent can do.
+1. **[Laub2015] is in a different parametrization from `tick`.** Eq. 4 uses
+   `alpha_L*exp(-beta t)`; `tick` and `hawk` use `alpha*beta*exp(-beta t)`. The map is
+   `alpha_L = alpha*beta`. This is the CLAUDE.md §1.3 kernel-normalization hazard
+   appearing as an actual disagreement between two sources rather than a hypothetical
+   one. Recorded in `conventions.md` C1 and `univariate_loglikelihood.md` §1.1, and
+   **verified numerically** — `-nll` reproduces eq. 21 to 1.17e-15 under the correct
+   substitution, and visibly fails under the reversed one.
+
+2. **Eq. 18-21 are written for the horizon `t_k`, not `T`.** [Laub2015] §4.2 derives
+   them for a process observed up to its last arrival; Theorem 3 is the general
+   `[0, T]` statement. Transcribing eq. 21 literally with a caller-supplied `T > t_n`
+   silently drops `int_{t_n}^{T} lambda*(u) du` — CLAUDE.md §1.3's "compensator on the
+   tail" hazard, now attested in the primary reference itself. Recorded in
+   `conventions.md` C4 and `univariate_loglikelihood.md` §1.2.
+
+**The PDF is not committed.** `.gitignore` excludes `docs/references/*.pdf`, a rule
+added in M0 on copyright grounds. arXiv preprints are freely accessible and this one
+could reasonably be committed, but that is a redistribution decision for the
+repository owner rather than one to make silently. `docs/references/README.md` records
+the arXiv ID and filename so any reader can fetch the exact document the citations
+resolve against.

@@ -5,33 +5,69 @@ until this is approved.
 
 Scope: univariate, exponential kernel, one observation window `[0, T]`.
 
-## 0. Citations, and one honest gap
+## 0. Citations
 
-Every convention used here is pinned in `conventions.md` by experiment, not by
-prose. The symbols are cited as follows:
+Primary citable reference, per CLAUDE.md §2: **[Laub2015]** — Laub, Taimre & Pollett,
+*Hawkes Processes*, arXiv:1507.02822v1, in `docs/references/`. Freely accessible, so
+every equation below resolves to something a reader can check.
 
-| Symbol / choice | Source |
+| Symbol / step | Source |
 | --- | --- |
-| kernel `phi(s) = alpha*beta*exp(-beta s)` | `conventions.md` C1, experiments E1, E2 |
-| branching ratio `= alpha` | `conventions.md` C2, `HawkesKernelExp.get_norm()` |
-| strict bounds, predictable intensity | `conventions.md` C3, experiment E2b |
+| exponential-kernel intensity, strict bounds | [Laub2015, eq. 4] |
+| branching ratio | [Laub2015, eq. 5] |
+| stationary mean intensity | [Laub2015, eq. 6] |
+| likelihood on `[0, T]` | [Laub2015, Theorem 3] (from Daley & Vere-Jones, Prop. 7.2.III) |
+| log-likelihood | [Laub2015, eq. 17] |
+| compensator, exponential kernel | [Laub2015, eq. 18] |
+| `O(n^2)` direct form | [Laub2015, eq. 19] |
+| `O(n)` recursion | [Laub2015, eq. 20], attributed there to Ozaki [Ozaki1979] |
+| `O(n)` log-likelihood | [Laub2015, eq. 21] |
+| kernel normalization actually used | `conventions.md` C1, experiments E1, E2 |
+| predictable intensity | `conventions.md` C3, experiment E2b |
 | compensator integrates to `T` | `conventions.md` C4 |
 | `T` supplied by the caller | `conventions.md` C5 |
 | ties, ordering, input contract | `conventions.md` C8, experiment E3 |
 
-**The gap.** CLAUDE.md §2 requires papers to be cited by equation number, and
-`docs/references/` is empty — the PDFs are not committed and I do not have them. I
-will not invent equation numbers I have not read. Two consequences:
+[Ozaki1979] is cited for provenance only, without an equation number: no PDF of it is
+in `docs/references/`, and CLAUDE.md §2 permits provenance-only citation in that case.
+Everything it is credited with here is reproduced in [Laub2015] with equation numbers.
 
-- The recursion in §4 is attributed to **[Ozaki1979]** for provenance, *without* an
-  equation number. The derivation below is self-contained: every step is shown, so
-  it can be checked line by line without the paper.
-- The likelihood in §3 is the standard point-process likelihood. It is derived here
-  from the compensator rather than quoted.
+### 1.1 Reparametrization: [Laub2015] is not in `tick`'s parametrization
 
-Filed as **OQ-11**. Before this document is treated as fully compliant with
-CLAUDE.md §2, the PDFs must be added and the equation numbers filled in. The
-mathematics does not depend on that; the audit trail does.
+This is the single most important line in this document, and getting it wrong makes
+every equation below wrong by a factor of `beta`.
+
+[Laub2015, eq. 4] writes
+
+```
+lambda*(t) = lambda + sum_{t_i < t} alpha_L * exp(-beta*(t - t_i))
+```
+
+`hawk` uses `tick`'s parametrization (`conventions.md` C1), in which the kernel is
+`alpha*beta*exp(-beta t)`. So throughout this document:
+
+```
+lambda  ->  mu           (Laub's background intensity)
+alpha_L ->  alpha*beta   (Laub's jump size)
+beta    ->  beta         (unchanged)
+```
+
+Under that substitution [Laub2015, eq. 5]'s branching ratio `alpha_L/beta` becomes
+`alpha`, and [Laub2015, eq. 6]'s stationary mean `lambda/(1-n)` becomes
+`mu/(1-alpha)`. Both agree with `tick` (C2), which is a useful cross-check that the
+substitution is the right way round.
+
+### 1.2 One more difference from [Laub2015]
+
+Eq. 18-21 are derived in [Laub2015] §4.2 for a process *observed up to the last
+arrival*, so their horizon is `t_k`, not `T`. Theorem 3 is the general statement with
+`[0, T]`. `hawk` takes `T` from the caller and never infers it (C5), so §2-§4 below
+carry `T` throughout. Setting `T = t_n` recovers Laub's form.
+
+Transcribing eq. 21 literally with a caller-supplied `T > t_n` would silently drop
+`int_{t_n}^{T} lambda*(u) du`. That is CLAUDE.md §1.3's "compensator on the tail"
+hazard, and it appears here as a real difference between the cited paper and what
+must be coded — not as a hypothetical.
 
 ## 1. Setup and notation
 
@@ -105,8 +141,15 @@ not a constant — it grows with the trailing dead time.
 
 ## 3. Log-likelihood
 
-For a point process on `[0, T]` with predictable intensity `lambda`, observed events
-`t_1..t_n`:
+[Laub2015, Theorem 3], which the paper attributes to Daley & Vere-Jones
+Proposition 7.2.III, gives the likelihood of a regular point process on `[0, T]`:
+
+```
+L = [ prod_{i=1}^{n} lambda*(t_i) ] * exp( -int_0^T lambda*(u) du )
+```
+
+Taking logarithms, and using `Lambda(T) = int_0^T lambda*(u) du` — this is
+[Laub2015, eq. 17] with the horizon generalized from `t_k` to `T` per §1.2:
 
 ```
 log L = sum_{k=1}^{n} log lambda(t_k) - Lambda(T)                          (3.1)
@@ -128,8 +171,17 @@ nll(mu, alpha, beta)
                                                                            (3.3)
 ```
 
-(3.3) is the **definition**. It is `O(n^2)` because of the inner sum. M1 Part B
+(3.3) is the **definition**, and is [Laub2015, eq. 19] under the substitution of
+§1.1 and with the horizon of §1.2. It is `O(n^2)` because of the inner sum. M1 Part B
 step 5 transcribes exactly this, with no simplification, as the reference oracle.
+
+Sanity check against the cited form. [Laub2015, eq. 18] gives the compensator as
+`Lambda(t_k) = lambda*t_k - (alpha_L/beta) * sum_i [ exp(-beta*(t_k - t_i)) - 1 ]`.
+Substituting `alpha_L = alpha*beta` and `t_k -> T` turns `alpha_L/beta` into `alpha`
+and flips the bracket's sign, giving
+`mu*T + alpha * sum_i ( 1 - exp(-beta*(T - t_i)) )`, which is (2.1). The `beta` in the
+numerator of the substitution cancels the `beta` in Laub's denominator — the clearest
+available confirmation that §1.1 is the right way round.
 
 `lambda(t_k) >= mu > 0` always, so the logarithm is never evaluated at zero or below
 and no guard is needed.
@@ -142,18 +194,26 @@ Define the **excitation state**
 A(t) := sum_{i : t_i < t} exp(-beta * (t - t_i))                           (4.1)
 ```
 
-so that `lambda(t) = mu + alpha*beta*A(t)`. The recursion is due to [Ozaki1979]
-(equation number pending, §0).
+so that `lambda(t) = mu + alpha*beta*A(t)`. Under §1.1's substitution this is exactly
+[Laub2015, eq. 20]'s `A(i)`, and (4.5) below is [Laub2015, eq. 21]. The recursion is
+attributed there to [Ozaki1979].
 
 ### 4.1 Why the textbook recursion is wrong here
 
-The usual statement is `A_1 = 0` and
+[Laub2015, eq. 20] states, with base case `A(1) = 0`:
 
 ```
 A_k = exp(-beta*(t_k - t_{k-1})) * ( 1 + A_{k-1} )                         (4.2)
 ```
 
-**(4.2) is only valid when all timestamps are distinct.** If `t_k = t_{k-1}` then
+**(4.2) is only valid when all timestamps are distinct — and [Laub2015] says so.**
+Its §4.1 proof states plainly: *"The HP is a simple point process, meaning that
+multiple arrivals cannot occur at the same time."* Eq. 20 is derived inside that
+assumption, so using it on tied data is outside the domain the paper claims for it.
+This is not a defect in [Laub2015]; it is a defect in transcribing eq. 20 without
+carrying its hypothesis across.
+
+If `t_k = t_{k-1}` then
 `exp(0) = 1` and (4.2) yields `A_k = 1 + A_{k-1}`, which counts `t_{k-1}` as
 exciting `t_k`. C3 and experiment E3b say it must not. Since `hawk`'s input contract
 admits ties (C8), (4.2) cannot be the expression that gets coded.
@@ -299,9 +359,17 @@ dependencies.
 tie-heavy, plus the degenerate cases from §6 (empty, single, all-tied, endpoints).
 
 ```
-worst relative |recursive (4.5) - brute force (3.3)| : 3.553e-15
-worst relative |analytic gradient - central diff|    : 1.828e-08
+worst relative |recursive (4.5) - brute force (3.3)|            : 3.553e-15
+worst relative |analytic gradient - central diff|               : 1.828e-08
+worst relative |-nll - Laub eq.21 with alpha_L = alpha*beta|    : 1.170e-15
 ```
+
+The third line checks §1.1's reparametrization against the cited paper directly: over
+200 distinct-timestamp cases, `-nll` evaluated at `T = t_n` reproduces
+[Laub2015, eq. 21] to machine precision. It also checks that the substitution is
+*discriminating* rather than vacuous — using `alpha_L = alpha/beta` instead gives
+`-4.900096161055312` where the correct direction gives `-5.743925007617449` on the
+same input. A factor-of-`beta` slip would not pass unnoticed.
 
 The first is at the `f64` round-off floor, three orders inside the `1e-12` gate that
 Part B step 7 must meet.

@@ -98,3 +98,50 @@ print(f"\ntie case t={t}")
 print(f"  definition (3.3)      : {brute(t, mu, alpha, beta, T)!r}")
 print(f"  grouped recursion(4.5): {recursive(t, mu, alpha, beta, T)[0]!r}")
 print(f"  textbook (4.2)        : {recursive_naive(t, mu, alpha, beta, T)!r}  <- wrong")
+
+
+# ---------------------------------------------------------------------------
+# Cross-check against [Laub2015, eq. 21] under the reparametrization of
+# univariate_loglikelihood.md §1.1.  A factor-of-beta error in that substitution
+# would corrupt every downstream equation, so it is checked rather than asserted.
+#
+# Laub eq. 21, verbatim in Laub's own symbols (lambda, alpha_L, beta), horizon t_k:
+#   l = sum_i log(lambda + alpha_L*A(i)) - lambda*t_k
+#       + (alpha_L/beta) * sum_i [ exp(-beta*(t_k - t_i)) - 1 ]
+# with A(i) = sum_{j<i} exp(-beta*(t_i - t_j)) and A(1) = 0  (eq. 20).
+#
+# Laub assumes a simple point process ("multiple arrivals cannot occur at the same
+# time"), so this check uses distinct timestamps only -- eq. 20 is not claimed to
+# hold under ties, which is the whole point of section 4.2.
+def laub_eq21(t, lam, alpha_L, beta):
+    A, log_term = 0.0, 0.0
+    for i, ti in enumerate(t):
+        if i > 0:
+            A = math.exp(-beta * (ti - t[i - 1])) * (1.0 + A)      # eq. 20
+        log_term += math.log(lam + alpha_L * A)
+    t_k = t[-1]
+    tail = sum(math.exp(-beta * (t_k - ti)) - 1.0 for ti in t)
+    return log_term - lam * t_k + (alpha_L / beta) * tail
+
+worst_laub = 0.0
+for _ in range(200):
+    n = random.randint(2, 40)
+    T_end = random.uniform(5.0, 50.0)
+    t = sorted(set(random.uniform(0, T_end) for _ in range(n)))    # distinct
+    mu = random.uniform(0.05, 3.0)
+    alpha = random.uniform(0.01, 0.95)
+    beta = random.uniform(0.1, 4.0)
+    # Laub's horizon is the last event, so evaluate ours at T = t[-1].
+    ours = recursive(t, mu, alpha, beta, t[-1])[0]
+    theirs = laub_eq21(t, mu, alpha * beta, beta)        # alpha_L = alpha*beta
+    worst_laub = max(worst_laub, abs((-ours) - theirs) / max(1.0, abs(theirs)))
+
+print(f"\nworst relative |-nll  -  Laub eq.21(alpha_L=alpha*beta)| : {worst_laub:.3e}")
+
+# And confirm the substitution is not reversible: alpha_L = alpha/beta must FAIL,
+# so the check above is actually discriminating.
+t = [1.0, 2.5, 3.1, 4.7]
+mu, alpha, beta = 0.7, 0.5, 2.3
+ours = recursive(t, mu, alpha, beta, t[-1])[0]
+print(f"  alpha_L = alpha*beta : {laub_eq21(t, mu, alpha * beta, beta)!r}  vs -nll {-ours!r}")
+print(f"  alpha_L = alpha/beta : {laub_eq21(t, mu, alpha / beta, beta)!r}  <- wrong direction")
