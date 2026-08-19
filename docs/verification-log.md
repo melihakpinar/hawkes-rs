@@ -1,0 +1,288 @@
+# Verification log
+
+Evidence that this repository's oracles detect the failures they exist to detect.
+
+CLAUDE.md §3: *"When you add an oracle, first prove it works: deliberately break the
+code it guards, confirm the test goes red, then revert. An oracle that has never gone
+red is not known to be an oracle."*
+
+This file is the record of that. Every entry below was run, and the failure output is
+quoted verbatim rather than paraphrased. The working tree was restored after each,
+and the fixture checksums were re-verified afterwards
+(`shasum -a 256 -c`, all six `OK`).
+
+Environment: `rustc 1.95.0`, macOS (darwin 22.6.0), `tick` oracle image
+`hawk-tick:0.8.0.2`.
+
+---
+
+## Baseline: green
+
+```
+cargo fmt --check                                          clean
+cargo clippy --all-targets --all-features -- -D warnings   clean
+cargo test                                                 8 passed, 0 failed
+```
+
+The eight are: three in `differential_tick`, two in `roundtrip_proptest` and three
+in `gradient_check`. Two further invariants in `gradient_check` are `const`
+assertions, checked by the compiler rather than the test runner, so they do not
+appear in that count — see S9.
+
+---
+
+## Harness 1 — differential test against `tick`
+
+`hawk/tests/differential_tick.rs`. Goal step 5.
+
+### S1 — perturb the stub log-likelihood by `+1e-6`
+
+The core check: does the harness actually compare, at a tolerance that matters? The
+perturbation is a thousand times `LOG_LIKELIHOOD_TOLERANCE` and far too small to
+notice by reading a fixture.
+
+```rust
+-    evaluation.tick_loss
++    evaluation.tick_loss + 1e-6
+```
+
+**RED**, as required:
+
+```
+test differential_against_tick ... FAILED
+panicked at hawk/tests/differential_tick.rs:131:13
+```
+
+The other two tests in the file stayed green, so the failure was localized rather
+than collateral. Reverted; green.
+
+### S2 — transpose the adjacency matrix when rebuilding `coeffs`
+
+This is CLAUDE.md §1.3's "multivariate index order" hazard, injected directly: a
+transposed matrix produces plausible-looking numbers.
+
+```rust
+-            for row in &evaluation.adjacency { expected.extend_from_slice(row); }
++            for column in 0..evaluation.adjacency.len() {
++                for row in &evaluation.adjacency { expected.push(row[column]); }
++            }
+```
+
+**RED**:
+
+```
+test fixture_evaluation_coeffs_use_ticks_layout ... FAILED
+panicked at hawk/tests/differential_tick.rs:270:17
+```
+
+Note what stayed green: `differential_against_tick` and
+`fixtures_are_internally_consistent`. Only the test that claims to pin the layout
+failed. That is the intended blast radius — and it confirms the corpus contains
+asymmetric fixtures, since on a symmetric one a transpose is undetectable by
+construction. Reverted; green.
+
+### S7 — corrupt a committed fixture
+
+Guards the corpus rather than the code. One timestamp in `univariate_tiny.json` was
+moved past `end_time`.
+
+**RED**, with a message that names the file and component:
+
+```
+test fixtures_are_internally_consistent ... FAILED
+univariate_tiny: component 0 has a timestamp outside [0, end_time]
+```
+
+Fixture restored; checksum re-verified against the pre-sabotage manifest.
+
+### S8 — remove the fixtures entirely
+
+The failure mode that matters most for a data-driven harness: sweeping zero inputs
+and reporting success. `tests/fixtures/` was replaced with an empty directory.
+
+**RED on all three tests**, with an actionable message rather than a vacuous pass:
+
+```
+no fixtures found in .../tests/fixtures. Regenerate them with the pinned tick
+image; see benchmarks/docker/README.md
+```
+
+Restored; green.
+
+---
+
+## Harness 2 — round-trip property test
+
+`hawk/tests/roundtrip_proptest.rs`. Goal step 6.
+
+### S3 — make the stub return fixed parameters
+
+Exactly the sabotage the goal specifies for this step: an estimator that ignores its
+input and returns a constant.
+
+```rust
+-fn stub_simulate_and_fit(truth: Parameters) -> Parameters { truth }
++fn stub_simulate_and_fit(_truth: Parameters) -> Parameters {
++    Parameters { baseline: 1.0, excitation: 0.5, decay: 1.0 }
++}
+```
+
+**RED**, and `proptest` shrank the counterexample to the corner of the generator's
+range:
+
+```
+test simulate_then_fit_recovers_parameters ... FAILED
+    baseline: 0.05,
+    excitation: 0.01,
+    decay: 0.1,
+```
+
+Shrinking working is itself worth confirming: in M1 it is what turns a failure into
+a diagnosable one. Reverted; green.
+
+### S4 — let the generator emit non-stationary parameters
+
+The generator is part of the harness. If it produced parameters no Hawkes process is
+defined for, every downstream failure would be ambiguous.
+
+```rust
+-    (0.05f64..5.0, 0.01f64..0.9, 0.1f64..5.0)
++    (0.05f64..5.0, 0.01f64..1.9, 0.1f64..5.0)
+```
+
+**RED**, catching a branching ratio above 1:
+
+```
+test generator_only_emits_stationary_parameters ... FAILED
+    excitation: 1.5706592800173285,
+```
+
+Reverted; green.
+
+---
+
+## Harness 3 — finite-difference gradient check
+
+`hawk/tests/gradient_check.rs`. Goal step 7.
+
+Green against closed-form functions first: a quadratic and `exp(x) + y*ln(z)`, both
+with gradients taken by hand. Neither is a Hawkes quantity, per the goal.
+
+### S0 — the harness's own first design was wrong
+
+Recorded because it is the strongest evidence in this file: this harness went red
+before any sabotage, on a bug in itself.
+
+The original version compared gradients with an **absolute** tolerance. It failed at
+`(x, y) = (100, 0.5)`:
+
+```
+at [100.0, 0.5]: analytic [608.0, 201.0] vs numeric [608.0000006477349, ...],
+max discrepancy 6.477348506450653e-7 > 1e-7
+```
+
+This is correct behaviour by the checker and a real defect in its design. A central
+difference's round-off floor is `eps * |f| / (h * |f'|)`, which grows with the
+*value* of `f`, not its derivative — so no absolute tolerance holds uniformly. Fixed
+by measuring discrepancy relative to `max(1, |analytic|, |numeric|)`; the same worst
+case is then `1.07e-9`, matching the predicted floor.
+
+The tolerance was **not** loosened to make the test pass. Had the failure been
+answered by relaxing 1e-7, the harness would have been silently weakened at exactly
+the operating points where a gradient bug is hardest to see.
+
+### S5 — negate one component of the analytic gradient
+
+```rust
+-vec![6.0*x + 2.0*y + 7.0,   2.0*x + 10.0*y - 4.0]
++vec![6.0*x + 2.0*y + 7.0, -(2.0*x + 10.0*y - 4.0)]
+```
+
+**RED on two tests**, which is the correct blast radius:
+
+```
+test central_difference_matches_quadratic ... FAILED
+at [0.0, 0.0]: analytic [7.0, 4.0] vs numeric [7.000000000001449, -4.000000000026205],
+max discrepancy 1.9999999999934488 > 1e-7
+
+test detects_a_wrong_gradient ... FAILED
+harness failed to detect a flipped sign
+```
+
+The second failure is the interesting one: `detects_a_wrong_gradient` builds its
+wrong gradients *from* `quadratic_gradient`, so corrupting the source of truth makes
+the "wrong" gradient accidentally right. The harness noticed. Reverted; green.
+
+### S6 — replace central differences with forward differences
+
+Tests that the harness's accuracy claim is real and not accidental. Forward
+differences are `O(h)` rather than `O(h^2)`; at `h = 1e-5` the difference is visible.
+
+```rust
+-        gradient.push((forward - backward) / (2.0 * step));
++        gradient.push((forward - f(point)) / step);
+```
+
+**RED on both closed-form tests**:
+
+```
+test central_difference_matches_quadratic ... FAILED
+max discrepancy 1.2499994483161636e-5 > 1e-7
+
+test central_difference_matches_transcendental ... FAILED
+max discrepancy 4.99998196496123e-6 > 1e-7
+```
+
+`detects_a_wrong_gradient` correctly stayed green — a less accurate numeric gradient
+still detects a sign flip. Reverted; green.
+
+### S9 — loosen `GRADIENT_TOLERANCE` to `1e-4`
+
+The tolerance is guarded by `const _: () = assert!(...)`, so this fails at **compile
+time** rather than at test time:
+
+```
+error[E0080]: evaluation panicked: GRADIENT_TOLERANCE is loose enough to admit real
+derivative errors
+   --> hawk/tests/gradient_check.rs:218:15
+```
+
+A future change that quietly relaxes the tolerance to make a failure go away will not
+build. Reverted; green.
+
+### Permanent detection path
+
+`detects_a_wrong_gradient` is the sabotage made permanent: rather than relying on
+this log alone, it asserts on every run that the comparator *reports* a discrepancy
+for a flipped sign, transposed components, a dropped term, and a relative
+perturbation of 1e-5. The detection path is therefore exercised continuously, not
+only on the day it was written.
+
+---
+
+## Summary
+
+| ID | Harness | What was broken | Result |
+| --- | --- | --- | --- |
+| S0 | gradient | (found in the harness itself: absolute tolerance) | RED, design fixed |
+| S1 | differential | stub log-likelihood perturbed by 1e-6 | RED |
+| S2 | differential | adjacency transposed in the coefficient layout | RED |
+| S3 | round-trip | estimator returns constant parameters | RED |
+| S4 | round-trip | generator emits non-stationary parameters | RED |
+| S5 | gradient | one analytic gradient component negated | RED |
+| S6 | gradient | central differences replaced by forward differences | RED |
+| S7 | differential | a committed fixture corrupted | RED |
+| S8 | differential | fixtures removed entirely | RED |
+| S9 | gradient | tolerance loosened to 1e-4 | RED (compile time) |
+
+Every harness has been observed both red and green. The working tree after all
+sabotages is byte-identical to before them.
+
+## Not yet proven
+
+Two of CLAUDE.md §3's five oracles do not exist yet and are not claimed here:
+
+1. **Analytic identity** (stationary mean intensity) — needs a simulator. M1.
+2. **Time-rescaling / Ogata residuals** — needs a simulator and a compensator. M1.
+
+The three that do exist are the three that can be built without algorithm code.
