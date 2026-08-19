@@ -14,6 +14,17 @@ and the fixture checksums were re-verified afterwards
 Environment: `rustc 1.95.0`, macOS (darwin 22.6.0), `tick` oracle image
 `hawk-tick:0.8.0.2`.
 
+### Cross-machine reproducibility, confirmed
+
+The fixtures were generated on macOS/arm64, where the pinned `linux/amd64` image runs
+under emulation. CI then rebuilt that image from scratch on a native `linux/amd64`
+runner, regenerated all six fixtures and compared them against the committed files
+with `generate_fixtures.py --check`. All six reported `MATCH`.
+
+Byte-identical output across two different host architectures is the property the
+platform pin exists to buy, and it is now checked on every pull request rather than
+asserted once.
+
 ---
 
 ## Baseline: green
