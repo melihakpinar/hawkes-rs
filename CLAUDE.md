@@ -93,7 +93,7 @@ resolution in `docs/derivations/conventions.md`.
 
 ## 2. Sources of truth
 
-Papers live in `docs/references/`. Cite them as `[Ozaki1979, eq. 7]`.
+Citations must resolve to an equation in a freely accessible source. [Laub2015, eq. N] is the primary citable reference. The original papers (Hawkes 1971, Ozaki 1979, Ogata 1981) are cited alongside for provenance, without equation numbers unless a PDF is in docs/references/.
 
 - **Ozaki, T. (1979).** Maximum likelihood estimation of Hawkes' self-exciting point
   processes. *Ann. Inst. Statist. Math.* 31(1), 145–155. — the O(n) recursive

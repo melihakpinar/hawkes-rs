@@ -1,8 +1,30 @@
 # References
 
-Papers cited by this project, as PDFs. They are **not committed** — most are under
-publisher copyright. Drop them here locally; `.gitignore` excludes PDFs in this
-directory.
+Papers cited by this project, as PDFs.
+
+**Primary citable reference** (CLAUDE.md §2). Citations must resolve to an equation in
+a freely accessible source:
+
+| Key | Paper | Where to get it |
+| --- | --- | --- |
+| `Laub2015` | Laub, P. J., Taimre, T. & Pollett, P. K. (2015). *Hawkes Processes.* arXiv:1507.02822v1 | <https://arxiv.org/abs/1507.02822> — file `1507.02822v1.pdf` |
+
+The equations relied on so far: eq. 4 (exponential-kernel intensity), eq. 5 (branching
+ratio), eq. 6 (stationary mean intensity), Theorem 3 (likelihood on `[0, T]`), eq. 17
+(log-likelihood), eq. 18 (compensator), eq. 19 (`O(n^2)` form), eq. 20 (Ozaki
+recursion), eq. 21 (`O(n)` form), Theorem 4 (random time change), Algorithm 2 (Ogata
+thinning).
+
+**Note the parametrization.** [Laub2015, eq. 4] uses `alpha_L * exp(-beta t)` while
+`hawk` and `tick` use `alpha * beta * exp(-beta t)`. The map is
+`alpha_L = alpha * beta`. See `docs/derivations/conventions.md` C1 and
+`univariate_loglikelihood.md` §1.1 — getting it backwards makes every downstream
+equation wrong by a factor of `beta`.
+
+The remaining papers below are **not committed**: they are under publisher copyright,
+and `.gitignore` excludes PDFs in this directory. They are cited for provenance only,
+without equation numbers, which CLAUDE.md §2 permits when no PDF is present. Drop them
+here locally if you have access.
 
 Cite a paper by author, year and **equation number**, e.g. `[Ozaki1979, eq. 7]`.
 A citation without an equation number does not satisfy CLAUDE.md §1: it does not let
