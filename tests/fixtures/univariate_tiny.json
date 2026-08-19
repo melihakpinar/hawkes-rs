@@ -1,0 +1,125 @@
+{
+  "adjacency": [
+    [
+      0.3
+    ]
+  ],
+  "baseline": [
+    0.4
+  ],
+  "decay": 1.0,
+  "description": "Univariate, ~10 events. Small enough to check by hand.",
+  "end_time": 20.0,
+  "evaluations": [
+    {
+      "adjacency": [
+        [
+          0.3
+        ]
+      ],
+      "baseline": [
+        0.4
+      ],
+      "coeffs": [
+        0.4,
+        0.3
+      ],
+      "label": "truth",
+      "tick_grad": [
+        -0.08754888935523875,
+        -0.21750229952873582
+      ],
+      "tick_loss": -0.18928042966778857
+    },
+    {
+      "adjacency": [
+        [
+          0.3
+        ]
+      ],
+      "baseline": [
+        0.68
+      ],
+      "coeffs": [
+        0.68,
+        0.3
+      ],
+      "label": "baseline_scaled_up",
+      "tick_grad": [
+        0.43924354979229535,
+        0.10604457103251319
+      ],
+      "tick_loss": -0.12996012123702183
+    },
+    {
+      "adjacency": [
+        [
+          0.12
+        ]
+      ],
+      "baseline": [
+        0.4
+      ],
+      "coeffs": [
+        0.4,
+        0.12
+      ],
+      "label": "adjacency_scaled_down",
+      "tick_grad": [
+        -0.4812173425383797,
+        -0.6532532666180451
+      ],
+      "tick_loss": -0.11528760344782449
+    },
+    {
+      "adjacency": [
+        [
+          0.44999999999999996
+        ]
+      ],
+      "baseline": [
+        0.24
+      ],
+      "coeffs": [
+        0.24,
+        0.44999999999999996
+      ],
+      "label": "both_scaled",
+      "tick_grad": [
+        -0.42732256513627276,
+        -0.22598690358782844
+      ],
+      "tick_loss": -0.18519196591339726
+    }
+  ],
+  "events": [
+    [
+      6.173810259392609,
+      10.970943091392193,
+      11.307815575836115,
+      11.655885436944137,
+      12.3406216783892,
+      13.799602808592354,
+      14.214383626848514,
+      14.467876052445442,
+      14.948006992224414,
+      16.043054573348055,
+      16.17213943476666,
+      17.26014921539542,
+      19.413853388446324
+    ]
+  ],
+  "generator": {
+    "numpy_version": "2.5.2",
+    "python_version": "3.13.5",
+    "script": "benchmarks/docker/generate_fixtures.py",
+    "seed": 20240001,
+    "tick_version": "0.8.0.2"
+  },
+  "n_jumps": 13,
+  "n_nodes": 1,
+  "name": "univariate_tiny",
+  "schema_version": 1,
+  "spectral_radius": 0.3,
+  "tick_loss_convention": "negative log-likelihood ratio w.r.t. unit-rate Poisson, divided by n_jumps; see docs/open-questions.md OQ-8"
+}
