@@ -271,6 +271,97 @@ only on the day it was written.
 
 ---
 
+---
+
+# M1 Part B
+
+Environment as above. `hawk` now has algorithms, so from here the oracles guard real
+code rather than stubs.
+
+## Harness 4 — brute-force reference (step 5)
+
+`hawk/tests/reference_loglikelihood.rs`. The reference every other likelihood test is
+measured against, so it cannot be checked against `hawk`. Its expected values are hand
+calculations written out in the tests, plus the Poisson degenerate identity.
+
+### S10 — strict bounds relaxed to inclusive
+
+`t_i < t_k` -> `t_i <= t_k` in the reference's inner sum. This is CLAUDE.md §1.3's
+sum-bounds hazard.
+
+**RED on three tests**: both hand calculations and the tie case. Reverted; green.
+
+### S11 — drop the `beta` factor from the kernel, and a real gap it exposed
+
+`alpha * beta * exp(...)` -> `alpha * exp(...)`, i.e. silently switching to
+[Laub2015]'s parametrization.
+
+**RED, but only on one test** — and that is the finding. `matches_hand_calculation_two_events`
+passed, because it used `beta = 1.0`, where `alpha*beta` and `alpha` coincide. A test
+that cannot distinguish the two conventions is no guard against the single most
+consequential convention in this repository.
+
+The hand calculation was recomputed with `beta = 1.5` and the test now fails under the
+same sabotage (`5.396890080120764` correct, `5.422964788539137` sabotaged). The
+blind spot was found by sabotage and would not have been found by reading.
+
+## Harness 5 — the O(n) recursion (step 7)
+
+`hawk/tests/loglikelihood.rs`. Gated against the brute force, relative to the
+computation scale rather than to `|nll|`.
+
+### S12 — use the textbook recursion [Laub2015, eq. 20]
+
+Removed the distinct-time guard so the state advances on every event with
+multiplicity 1 — exactly the published form.
+
+**RED on `agrees_with_brute_force_on_tied_input`, green on everything else.** That is
+the precise signature this bug should have: the textbook form is correct for distinct
+timestamps and wrong only at ties, which is why it survives in the literature and why
+the tied fixtures and tied test cases exist.
+
+### S13 — advance the state with `1.0` instead of the multiplicity
+
+`gap_decay * (B + count_at_previous_time)` -> `gap_decay * (B + 1.0)`. Differs from
+S12 in mechanism, identical in effect: a triple tie contributes once instead of three
+times.
+
+**RED on the tied test only.** Reverted; green.
+
+## Harness 6 — the analytic gradient (step 8)
+
+`hawk/tests/gradient.rs`, using the same central-difference checker `gradient_check.rs`
+already proved can go red.
+
+### S14 — drop `beta * Bp_j` from (G.4)
+
+The term the derivation singles out as the one most likely to be omitted: `lambda_j`
+depends on `beta` both directly and through `B_j(beta)`.
+
+**RED** on the randomized sweep and on the tied cases. This is the sabotage that
+matters most, because `tick` cannot check `d/dbeta` at all — `decay` is a fixed
+constructor argument there, not a coefficient — so this test is the only oracle for
+(G.7).
+
+### S15 — compute `Bp_j` from the pre-update state
+
+`-gap * advanced` -> `-gap * excitation_state`, i.e. hazard 1 of the gradient
+derivation §5: (G.6) requires the *advanced* value.
+
+**RED.** Worth noting this sabotage's first attempt silently applied nothing, because
+the anchor text had been reformatted by `rustfmt` and the patch did not match. The run
+reported all tests green. A sabotage that fails to apply looks exactly like an oracle
+that does not work, and only re-running against the real line distinguished them.
+Sabotage patches must be confirmed to have landed before their result is believed.
+
+### S16 — drop the chain-rule factor in log space (G.8)
+
+`parameters.decay * self.decay` -> `self.decay` in `to_log_parameter_space`.
+
+**RED on all three gradient tests**, and only in the log-space assertions — the
+natural-space check is blind to it by construction, which is exactly why the
+derivation requires the finite-difference check to run in both parametrizations.
+
 ## Summary
 
 | ID | Harness | What was broken | Result |
@@ -285,6 +376,13 @@ only on the day it was written.
 | S7 | differential | a committed fixture corrupted | RED |
 | S8 | differential | fixtures removed entirely | RED |
 | S9 | gradient | tolerance loosened to 1e-4 | RED (compile time) |
+| S10 | reference | strict bounds relaxed to inclusive | RED |
+| S11 | reference | kernel's `beta` factor dropped | RED, after fixing a test blind spot it exposed |
+| S12 | recursion | textbook [Laub2015, eq. 20] instead of the grouped form | RED on ties only |
+| S13 | recursion | state advanced with 1.0 instead of the multiplicity | RED on ties only |
+| S14 | gradient | `beta*Bp_j` dropped from (G.4) | RED |
+| S15 | gradient | `Bp_j` computed from the pre-update state | RED |
+| S16 | gradient | chain-rule factor dropped from (G.8) | RED in log space only |
 
 Every harness has been observed both red and green. The working tree after all
 sabotages is byte-identical to before them.

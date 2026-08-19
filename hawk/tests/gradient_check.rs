@@ -21,81 +21,9 @@
 //! is exercised on every run rather than only during sabotage. Recorded in
 //! `docs/verification-log.md`.
 
-/// Step size for the central difference.
-///
-/// Central differences carry truncation error `O(h^2 * f''')` and round-off error
-/// `O(eps_machine / h)`, so the total is minimised near `h = eps^(1/3) ~ 6e-6` for
-/// f64. 1e-5 sits just above that, trading a little truncation error for margin
-/// against round-off on functions whose scale is larger than unity.
-const STEP: f64 = 1e-5;
+mod common;
 
-/// Agreement required between an analytic gradient and the central difference,
-/// measured **relatively** (see [`max_relative_discrepancy`]).
-///
-/// The measure has to be relative. The round-off floor of a central difference is
-/// `eps * |f| / (h * |f'|)`, which grows with the *value* of `f`, not with its
-/// derivative. An absolute tolerance therefore cannot hold uniformly: at
-/// `(x, y) = (100, 0.5)` the quadratic below has `|f| ~ 3e4` and the observed
-/// absolute error is `6.5e-7`, while at the origin it is around `1e-11`. The first
-/// version of this harness used an absolute tolerance and failed on exactly that
-/// point.
-///
-/// Relatively, that same worst case is `1.07e-9`, matching the predicted floor. A
-/// tolerance of 1e-7 leaves roughly two orders of magnitude of headroom over the
-/// floor while still catching a sign error, a transposed index, a dropped term, or
-/// a relative perturbation of 1e-5 — the failures this oracle exists for.
-const GRADIENT_TOLERANCE: f64 = 1e-7;
-
-/// Central-difference approximation to the gradient of `f` at `point`.
-///
-/// `(f(x + h e_i) - f(x - h e_i)) / 2h` per coordinate. Central rather than forward
-/// differences because the error is `O(h^2)` rather than `O(h)`, which is what makes
-/// a tolerance tight enough to catch a real derivative bug achievable at all.
-fn central_difference_gradient<F>(f: F, point: &[f64], step: f64) -> Vec<f64>
-where
-    F: Fn(&[f64]) -> f64,
-{
-    let mut gradient = Vec::with_capacity(point.len());
-    let mut perturbed = point.to_vec();
-
-    for index in 0..point.len() {
-        let original = point[index];
-
-        perturbed[index] = original + step;
-        let forward = f(&perturbed);
-
-        perturbed[index] = original - step;
-        let backward = f(&perturbed);
-
-        perturbed[index] = original;
-        gradient.push((forward - backward) / (2.0 * step));
-    }
-
-    gradient
-}
-
-/// Largest disagreement between two gradients, relative to their own magnitude.
-///
-/// Each component is scaled by `max(1, |analytic|, |numeric|)`. The floor of 1
-/// keeps the measure absolute for components near zero, where a relative error is
-/// meaningless and would otherwise divide by almost nothing.
-///
-/// Returned rather than asserted so that both outcomes are testable: a correct
-/// gradient must produce a small value, and a wrong one must produce a large value.
-fn max_relative_discrepancy(analytic: &[f64], numeric: &[f64]) -> f64 {
-    assert_eq!(
-        analytic.len(),
-        numeric.len(),
-        "gradients have different lengths: {} and {}",
-        analytic.len(),
-        numeric.len()
-    );
-    analytic
-        .iter()
-        .zip(numeric)
-        .map(|(a, n)| (a - n).abs() / a.abs().max(n.abs()).max(1.0))
-        .fold(0.0f64, f64::max)
-}
+use common::{GRADIENT_TOLERANCE, STEP, central_difference_gradient, max_relative_discrepancy};
 
 /// `f(x, y) = 3x^2 + 2xy + 5y^2 + 7x - 4y + 11`
 fn quadratic(v: &[f64]) -> f64 {
