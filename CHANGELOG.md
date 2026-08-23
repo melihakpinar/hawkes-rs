@@ -23,6 +23,15 @@ First public API. `hawk::univariate`:
 - `Fit::objective_evaluations` and `Fit::gradient_evaluations` — evaluation counts for
   a fit, counting line-search trials rather than iterations.
 
+### Changed
+
+- `negative_log_likelihood` computes the value in one pass without computing the
+  gradient. It previously delegated to `negative_log_likelihood_and_gradient` and
+  discarded the gradient. The returned value is bitwise unchanged, enforced by
+  `hawk/tests/bit_identical_evaluation.rs`; fitted parameters are identical digit for
+  digit. End-to-end fit time at `n = 1e6` went from 1.003165 s to 0.853488 s
+  (`docs/positioning-probe.md` §20).
+
 ### Verification
 
 - Brute-force `O(n^2)` reference, validated against hand calculations and the Poisson

@@ -420,3 +420,118 @@ is the "first `loss()`" column above. At `n = 1e6` that is 0.024014625 against `
 - Accuracy. Both were evaluated at the same point; the values returned were not
   compared here. Part 1 §9 covers agreement of fitted parameters.
 - Why the ratio in §13 moves with `n`.
+
+---
+
+# Part 3: after `negative_log_likelihood` stopped computing the gradient
+
+Part 2 §14 recorded `hawk` making 34-36 passes over the data per fit against `tick`'s
+23, because `negative_log_likelihood` delegated to
+`negative_log_likelihood_and_gradient` and discarded the gradient, so every objective
+evaluation cost a full value-plus-gradient pass.
+
+`negative_log_likelihood` is now a separate loop that does not compute the gradient.
+Parts 1 and 2 were re-run against it.
+
+Measurement only. No recommendation and no interpretation.
+
+## 17. Methodology, part 3
+
+Identical to §2-§4 and §12: same machine, both sides native `arm64`, single-threaded,
+median of 5 after 1 discarded warmup, same seed, same generated events.
+
+Parts 1 and 2 were re-run in full rather than partially, so every number in §18-§21
+comes from one session. `tick` was not modified and was re-run alongside, so its
+figures here are a fresh sample rather than the ones in §7 and §13; the difference
+between them is run-to-run variation.
+
+The change is confined to `hawk`'s value-only evaluation path. The value-plus-gradient
+path, the simulator, the optimizer, its settings and its stopping rule are unchanged.
+
+### What was verified about the change
+
+`hawk/tests/bit_identical_evaluation.rs` requires the value-only and
+value-plus-gradient paths to agree **bitwise**, not within a tolerance, on randomized
+parameters and event sequences, on tie-heavy input, and on events packed against the
+horizon. 6 tests, 400 randomized cases each for the two `proptest` cases.
+
+## 18. Single evaluation, wall clock
+
+Seconds. Median of 5 after 1 warmup; `[min, max]` of the same 5.
+
+| nominal `n` | `hawk` value only | `hawk` [min, max] | `hawk` value+gradient | `hawk` [min, max] | ratio within `hawk` |
+| --- | --- | --- | --- | --- | --- |
+| 1e4 | 0.000407583 | [0.000397750, 0.000486750] | 0.000576375 | [0.000525000, 0.000711042] | 1.41 |
+| 1e5 | 0.001638875 | [0.001541667, 0.001679958] | 0.003100125 | [0.002897959, 0.003352333] | 1.89 |
+| 1e6 | 0.015502542 | [0.015352042, 0.015628209] | 0.026328625 | [0.026144916, 0.026427917] | 1.70 |
+
+Against `tick`, steady state (weight cache populated, §15):
+
+| nominal `n` | `hawk` value only | `tick` `loss()` | ratio | `hawk` value+gradient | `tick` `loss_and_grad` | ratio |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1e4 | 0.000407583 | 0.000097167 | 4.19 | 0.000576375 | 0.000178125 | 3.24 |
+| 1e5 | 0.001638875 | 0.000958375 | 1.71 | 0.003100125 | 0.001538334 | 2.02 |
+| 1e6 | 0.015502542 | 0.009625458 | 1.61 | 0.026328625 | 0.015228000 | 1.73 |
+
+The `n = 1e4` row of both tables has the widest spread in the file; its `hawk`
+value+gradient median here (0.000576375) sits outside the `[min, max]` recorded in §13
+(0.000403625, `[0.000379667, 0.000877875]`).
+
+## 19. Passes per fit
+
+Counts are unchanged; what each pass costs is not.
+
+| nominal `n` | `hawk` iters | `hawk` objective | `hawk` gradient | `hawk` total passes | `tick` `loss` | `tick` `grad` | `tick` passes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1e4 | 10 | 12 | 22 | 34 | 13 | 10 | 23 |
+| 1e5 | 10 | 13 | 23 | 36 | 13 | 10 | 23 |
+| 1e6 | 10 | 13 | 23 | 36 | 13 | 10 | 23 |
+
+The 13 objective passes now take the value-only path. Before the change all 36 passes
+took the value+gradient path.
+
+## 20. End-to-end fit, re-run
+
+Part 1's measurement, repeated. Seconds, median of 5 after 1 warmup. The `was` columns
+are §7's figures.
+
+| nominal `n` | events | `hawk` | `hawk` [min, max] | `hawk` was | `tick` | `tick` was | ratio | ratio was |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1e3 | 889 | 0.001659 | [0.001655, 0.002020] | 0.001689 | 0.003613 | 0.004925 | 0.46 | 0.34 |
+| 1e4 | 10 079 | 0.008063 | [0.008053, 0.008131] | 0.009259 | 0.003573 | 0.003618 | 2.26 | 2.56 |
+| 1e5 | 100 041 | 0.084847 | [0.084781, 0.084959] | 0.099940 | 0.028033 | 0.027889 | 3.03 | 3.58 |
+| 1e6 | 998 244 | 0.853488 | [0.852060, 0.865668] | 1.003165 | 0.273762 | 0.272880 | 3.12 | 3.68 |
+
+### Fitted parameters, re-run
+
+Identical to §8, digit for digit, at every `n`:
+
+| nominal `n` | `mu` | `alpha` | `beta` | nll |
+| --- | --- | --- | --- | --- |
+| 1e3 | 0.49460905349693457 | 0.5561509035363936 | 1.115845305011844 | 654.2920047124547 |
+| 1e4 | 0.48741628955789373 | 0.6131595200336376 | 1.0002794165140831 | 6066.3526474497685 |
+| 1e5 | 0.4985274500156542 | 0.6013546245382045 | 0.9899905845033399 | 62291.271513841355 |
+| 1e6 | 0.5003743247478271 | 0.5989976666674659 | 1.0083739828789036 | 622971.8500983068 |
+
+Iteration counts, gradient norms and `converged` flags are also unchanged from §10.
+
+## 21. Arithmetic cross-check, `n = 1e6`
+
+Passes times per-pass cost, against the §20 fit median. Multiplication only.
+
+| composition | product | measured fit |
+| --- | --- | --- |
+| 13 x 0.015502542 + 23 x 0.026328625 | 0.807 | 0.853488 |
+| 36 x 0.026328625, the composition before the change | 0.948 | 1.003165 (§7) |
+
+## 22. What part 3 does not establish
+
+Everything in §11 and §16 still applies. In addition:
+
+- Nothing about `tick`. It was not modified; its numbers moved only by run-to-run
+  variation.
+- Whether the remaining gap has one cause or several. Only totals were measured.
+- Whether the gradient path admits the same treatment. It was not changed and not
+  investigated.
+- Whether `hawk`'s pass counts per fit can be reduced. The optimizer, its settings and
+  its stopping rule are untouched, and the counts in §19 are unchanged.
