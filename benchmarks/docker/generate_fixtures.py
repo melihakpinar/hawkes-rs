@@ -304,6 +304,26 @@ def build(scenario):
     }
 
 
+def report_difference(committed, regenerated, path=""):
+    """Print the first few leaf differences between two fixtures, with full repr."""
+    if isinstance(committed, dict) and isinstance(regenerated, dict):
+        for key in sorted(set(committed) | set(regenerated)):
+            if key not in committed:
+                print(f"      {path}{key}: absent in the committed file")
+            elif key not in regenerated:
+                print(f"      {path}{key}: absent in the regenerated fixture")
+            else:
+                report_difference(committed[key], regenerated[key], f"{path}{key}.")
+    elif isinstance(committed, list) and isinstance(regenerated, list):
+        if len(committed) != len(regenerated):
+            print(f"      {path[:-1]}: length {len(committed)} vs {len(regenerated)}")
+            return
+        for index, (a, b) in enumerate(zip(committed, regenerated)):
+            report_difference(a, b, f"{path[:-1]}[{index}].")
+    elif committed != regenerated:
+        print(f"      {path[:-1]}: committed {committed!r}  regenerated {regenerated!r}")
+
+
 def render(fixture):
     return json.dumps(fixture, indent=2, sort_keys=True) + "\n"
 
@@ -327,6 +347,14 @@ def main():
             status = "MATCH" if existing == text else "DIFFER"
             failures += status == "DIFFER"
             print(f"{status} {path.name} ({fixture['n_jumps']} events)")
+            if status == "DIFFER" and existing is not None:
+                # "DIFFER" on its own sends the reader to diff two 80 KB JSON files by
+                # hand. Name the fields, and for floats print both values, because the
+                # difference is usually in the last bits and invisible otherwise.
+                try:
+                    report_difference(json.loads(existing), fixture)
+                except json.JSONDecodeError:
+                    print("      committed file is not valid JSON")
         else:
             path.write_text(text)
             print(f"wrote {path.name} "
