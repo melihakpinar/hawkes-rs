@@ -4,14 +4,16 @@ A Rust library for multivariate Hawkes processes: simulation and maximum-likelih
 estimation. Python bindings via PyO3.
 
 `tick` remains the incumbent, is maintained, and is faster on the univariate
-exponential-kernel fit — roughly 3x at n = 1e6, largely because it holds beta fixed and
-can therefore precompute its exponential terms. `hawk` exists for different reasons,
-each of them measured: no Rust crate does Hawkes estimation at all; `tick`'s learner
-cannot express an observation window, so its baseline estimates are biased whenever the
-window has trailing dead time (OQ-5); its loss is neither the log-likelihood nor its own
-documented formula (OQ-8); its documented likelihood-fitting interface does not work;
-and it cannot estimate beta at all. Speed is not this library's claim, and the
-benchmarks must say so plainly.
+exponential-kernel fit — roughly 3x at n = 1e6. The probe decomposes that gap into a
+1.61x per-pass cost and a 36-vs-23 pass count, and does not establish what fraction of
+the per-pass difference comes from `tick` precomputing its exponential terms, which it
+can do because it holds beta fixed. `hawk` exists for different reasons, each of them
+measured: no Rust crate does Hawkes estimation at all; `tick`'s learner cannot express
+an observation window, so its baseline estimates are biased whenever the window has
+trailing dead time (OQ-5); its loss is neither the log-likelihood nor its own documented
+formula (OQ-8); its documented likelihood-fitting interface does not work; and it cannot
+estimate beta at all. Speed is not this library's claim, and the benchmarks must say so
+plainly.
 
 The library's only real product is **correct numbers**. Speed is secondary. A fast
 library that returns subtly wrong parameter estimates is worthless and worse than
