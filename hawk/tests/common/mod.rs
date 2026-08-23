@@ -3,6 +3,10 @@
 //! Included by several integration-test binaries, each of which uses a different
 //! subset, so unused-item warnings here are expected rather than informative.
 #![allow(dead_code)]
+// Index loops in the multivariate references, for the reason given at the top of
+// `hawk/src/multivariate.rs`: these are transcriptions of indexed formulae and the
+// indices are what a reader checks.
+#![allow(clippy::needless_range_loop)]
 
 use hawk::univariate::{Observation, Parameters};
 
@@ -284,4 +288,122 @@ fn invert_3x3(m: &[[f64; 3]; 3]) -> Option<[[f64; 3]; 3]> {
         }
     }
     Some(inverse)
+}
+
+// ---------------------------------------------------------------- multivariate
+
+use hawk::multivariate::{Observation as MultiObservation, Parameters as MultiParameters};
+
+/// Brute-force `O(n^2)` multivariate negative log-likelihood: a direct transcription
+/// of `docs/derivations/multivariate_loglikelihood.md` (M3.2).
+///
+/// ```text
+/// nll = sum_i mu[i]*T
+///     + sum_i sum_j alpha[i][j] * sum_k ( 1 - exp(-beta*(T - t^j_k)) )
+///     - sum_i sum_k log( mu[i] + sum_j sum_{t^j_l < t^i_k} alpha[i][j]*beta*exp(-beta*(t^i_k - t^j_l)) )
+/// ```
+///
+/// Same rules as the univariate reference: a transcription, not an optimisation. No
+/// pooled walk, no state recursion, no reuse of accumulators. The inner condition is
+/// `t^j_l < t^i_k`, **strict and on times**, which is what makes simultaneous events
+/// on different components not excite each other.
+///
+/// Uses the naive `1.0 - exp(-x)` where the production path uses `exp_m1`, so a bug in
+/// that choice cannot cancel on both sides.
+pub fn brute_force_multivariate_negative_log_likelihood(
+    parameters: &MultiParameters,
+    observation: &MultiObservation,
+) -> f64 {
+    let d = parameters.dimension();
+    let beta = parameters.decay();
+    let horizon = observation.horizon();
+    let events = observation.events();
+
+    let mut total = 0.0;
+    for i in 0..d {
+        total += parameters.baseline()[i] * horizon;
+    }
+    for i in 0..d {
+        for j in 0..d {
+            for &t in &events[j] {
+                total += parameters.excitation_at(i, j) * (1.0 - (-beta * (horizon - t)).exp());
+            }
+        }
+    }
+    for i in 0..d {
+        for &t_k in &events[i] {
+            let mut intensity = parameters.baseline()[i];
+            for j in 0..d {
+                for &t_l in &events[j] {
+                    if t_l < t_k {
+                        intensity +=
+                            parameters.excitation_at(i, j) * beta * (-beta * (t_k - t_l)).exp();
+                    }
+                }
+            }
+            total -= intensity.ln();
+        }
+    }
+    total
+}
+
+/// The scale of the multivariate computation, for use as a comparison denominator.
+///
+/// Same construction and same reasoning as [`computation_scale`]: the sum of the
+/// magnitudes fed into the accumulators, **not** `|nll|`, which is a difference of
+/// large terms and passes through zero.
+pub fn multivariate_computation_scale(
+    parameters: &MultiParameters,
+    observation: &MultiObservation,
+) -> f64 {
+    let d = parameters.dimension();
+    let beta = parameters.decay();
+    let horizon = observation.horizon();
+    let events = observation.events();
+
+    let mut scale = 0.0;
+    for i in 0..d {
+        scale += parameters.baseline()[i] * horizon;
+    }
+    for i in 0..d {
+        for j in 0..d {
+            for &t in &events[j] {
+                scale += parameters.excitation_at(i, j) * (1.0 - (-beta * (horizon - t)).exp());
+            }
+        }
+    }
+    for i in 0..d {
+        for &t_k in &events[i] {
+            let mut intensity = parameters.baseline()[i];
+            for j in 0..d {
+                for &t_l in &events[j] {
+                    if t_l < t_k {
+                        intensity +=
+                            parameters.excitation_at(i, j) * beta * (-beta * (t_k - t_l)).exp();
+                    }
+                }
+            }
+            scale += intensity.ln().abs();
+        }
+    }
+    scale
+}
+
+/// Deterministic pseudo-random multivariate parameters and events, for tests that
+/// must not depend on the simulator.
+pub struct Lcg(u64);
+
+impl Lcg {
+    pub fn new(seed: u64) -> Self {
+        Self(seed | 1)
+    }
+    pub fn next_f64(&mut self) -> f64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        (self.0 >> 11) as f64 / (1u64 << 53) as f64
+    }
+    pub fn next_usize(&mut self, bound: usize) -> usize {
+        (self.next_f64() * bound as f64) as usize % bound.max(1)
+    }
 }

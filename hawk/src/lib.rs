@@ -2,8 +2,10 @@
 //!
 //! # Status
 //!
-//! Pre-alpha. Only the univariate exponential-kernel process is implemented; see
-//! [`univariate`]. The multivariate case arrives in M2.
+//! Pre-alpha. [`univariate`] and [`multivariate`] implement the exponential-kernel
+//! process in one and `d` dimensions respectively. At `d = 1` the two agree bitwise;
+//! `univariate` is kept because it is measurably cheaper and is the reference the
+//! multivariate path is checked against.
 //!
 //! # Conventions
 //!
@@ -20,6 +22,7 @@
 #![forbid(unsafe_code)]
 
 mod error;
+pub mod multivariate;
 pub mod univariate;
 
 pub use error::Error;
