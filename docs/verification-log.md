@@ -633,6 +633,80 @@ defensible, and differ by one ulp. It means the two paths have stopped agreeing
 exactly, and either one must be brought back into line or the divergence must be made
 deliberate, in the test and in the doc comment together.
 
+---
+
+# M2: the multivariate oracles
+
+## Harness 13 — `d = 1` equivalence (step 9)
+
+`hawk/tests/multivariate_equivalence.rs`. One assertion, and the goal called it the
+highest-value one here: at `d = 1` the multivariate path must return **bitwise** the
+same value and gradient as the univariate path.
+
+### S34 — accumulate `count * value` instead of per event
+
+**GREEN on the first attempt**, and that is the finding — for the second time in this
+repository, after S30.
+
+The tie cases already included multiplicity 7, chosen because Part A had shown
+`7*x != x+x+...+x` for the value it tested there. It does not hold for the value this
+test accumulates. A short search found that multiplicity **6** discriminates broadly
+across decays and windows while 7 does not, for the compensator contributions in play.
+
+Which multiplicities discriminate depends on the value being accumulated, and reasoning
+about it case by case is exactly the sort of thing that produces a test which looks
+thorough and checks nothing. Multiplicities 4, 5, 6, 7 and 9 are now all present.
+**RED** after that.
+
+### S35 — regroup the intensity product as `beta * (alpha * state)`
+
+Algebraically identical, bitwise not.
+
+**RED** on the packed-against-the-horizon, tie-heavy and long cases; green on the
+short degenerate ones, where the rounding happens to agree.
+
+## Harness 14 — the multivariate recursion (step 8)
+
+`hawk/tests/multivariate_loglikelihood.rs`.
+
+### S33 — transpose the excitation index in the intensity
+
+`excitation[i*d + j]` -> `excitation[j*d + i]`, i.e. "i excites j" instead of "j excites
+i" (`conventions.md` C6).
+
+**RED on all eight tests.** The corpus and the hand-calculated cases are asymmetric
+throughout, so there is nowhere for a transposition to hide.
+
+### S38 — inflate the multivariate computation scale tenfold
+
+**RED on the two gate meta-tests, green on all six comparison tests.** That split is
+the whole point: a loosened gate does not fail, it stops catching things, and only a
+test that pins the gate's sensitivity notices.
+
+## Harness 15 — the multivariate gradient (step 11)
+
+`hawk/tests/multivariate_gradient.rs`.
+
+### S36 — drop `beta * state_derivative` from the pair accumulator
+
+The term (G.4) warns about, which in `d` dimensions appears once per `(i, j)` pair.
+
+**RED on all five tests.**
+
+### S37 — transpose the excitation index in the `d/dbeta` assembly
+
+**RED on all five.** Note this is a different transposition from S33: it is in (MG.8)'s
+weighting rather than in the intensity, and the likelihood tests cannot see it at all.
+
+### A boundary case the univariate check could not have
+
+`alpha[i][j] = 0` is legitimate in `d` dimensions and sits on the boundary of the
+domain, where a central difference would evaluate at `-h` and be rejected. The first
+version of this harness crashed there. It now uses the second-order one-sided formula
+`(-3f(x) + 4f(x+h) - f(x+2h)) / 2h` at zero coordinates — second-order rather than the
+first-order forward difference, whose `O(h)` error would be `1e-5` and would not fit
+inside the `1e-6` gate.
+
 ## Summary
 
 | ID | Harness | What was broken | Result |
@@ -670,6 +744,12 @@ deliberate, in the test and in the doc comment together.
 | S30 | value/gradient agreement | `-exp_m1(-x)` rewritten as `1 - exp(-x)` | GREEN at first — exposed a test gap; RED after the near-horizon case was added |
 | S31 | value/gradient agreement | `alpha` dropped from the value-only combination | RED |
 | S32 | value/gradient agreement | state advanced without the tie multiplicity | RED on tied cases only |
+| S33 | multivariate likelihood | excitation index transposed in the intensity | RED, all eight |
+| S34 | `d = 1` equivalence | `count * value` instead of per-event accumulation | GREEN at first — exposed a test gap; RED once multiplicity 6 was added |
+| S35 | `d = 1` equivalence | intensity product regrouped | RED |
+| S36 | multivariate gradient | `beta*Bp` dropped from the pair accumulator | RED |
+| S37 | multivariate gradient | excitation index transposed in `d/dbeta` | RED |
+| S38 | multivariate gate | computation scale inflated 10x | RED on the meta-tests only |
 
 Every harness has been observed both red and green. The working tree after all
 sabotages is byte-identical to before them.

@@ -119,9 +119,21 @@ fn nll_agrees_on_tied_input() {
         (vec![1.0, 2.0, 2.0, 2.0, 3.5], 6.0),
         (vec![0.0, 0.0, 1.5, 3.0, 5.0, 5.0], 5.0),
         (vec![2.0, 2.0, 2.0, 2.0], 4.0),
-        // Multiplicity 7: the case where `7*x` and `x` added seven times differ.
+        // Multiplicities where `count * x` and `x` added `count` times differ in
+        // f64, which is what forces the per-event accumulation rule of
+        // `multivariate_loglikelihood.md` §5.1.
+        //
+        // Which multiplicities discriminate depends on the value being accumulated,
+        // and that is not obvious: a sabotage replacing per-event accumulation with
+        // `count * value` survived a multiplicity-7 case and died on a multiplicity-6
+        // one. Several are used rather than reasoning about which.
+        (vec![1.0; 4], 4.0),
+        (vec![1.0; 5], 4.0),
+        (vec![1.0; 6], 4.0),
         (vec![1.0; 7], 4.0),
-        (vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 3.0], 4.0),
+        (vec![1.0; 9], 4.0),
+        (vec![2.0; 6], 5.0),
+        (vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 3.0], 4.0),
     ] {
         let label = format!("{times:?}");
         assert_nll_identical(&times, horizon, (0.7, 0.5, 1.3), &label);
