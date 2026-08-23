@@ -582,6 +582,57 @@ stayed green, which is right: they hold in distribution and do not depend on any
 particular realization. Reproducibility is the one property only this test asserts, and
 it is the property that makes every other failure in this suite debuggable.
 
+---
+
+# Harness 12 — the two evaluation paths agree bitwise (issue #13)
+
+`hawk/tests/bit_identical_evaluation.rs`. `negative_log_likelihood` no longer delegates
+to `negative_log_likelihood_and_gradient`; it is a separate loop. The two must return
+the same value **bitwise**, because there is no numerical reason for them to differ at
+all, so the correct tolerance is zero.
+
+### S30 — rewrite `-exp_m1(-x)` as the algebraically equal `1 - exp(-x)`
+
+The "harmless refactor" a future reader is most likely to make.
+
+**GREEN on the first attempt — the test did not catch it.** That is the finding. The
+per-event difference between the two forms is around `1e-16`, and against a compensator
+sum of order 1 to 100 it is below the accumulator's own ulp and disappears into the
+total. Every case in the file passed.
+
+The test was extended rather than the claim weakened.
+`agree_on_events_packed_against_the_horizon` puts a handful of events within `1e-11` of
+`T`, so every contribution is around `1e-12` and a `1e-16` perturbation sits five
+orders above the ulp of the sum instead of below it. That regime is also exactly what
+`-exp_m1` was chosen for (`univariate_loglikelihood.md` §5).
+
+**RED after that**, deterministically:
+
+```
+1e-11 .. 1e-13 at (2, 0.9, 5): value-only path gave -2.962844630156712
+(bits 0xc007b3e7e2ad37e6), value+gradient path gave -2.9628446301567126
+(bits 0xc007b3e7e2ad37e7); difference 4.440892098500626e-16.
+```
+
+One bit apart. The randomized case also failed on that run but had not on the previous
+one, so it catches this only sometimes; the deterministic case is the reliable guard.
+
+### S31 — drop `alpha` from the value-only path's final combination
+
+**RED on all six tests.** Reverted; green.
+
+### S32 — advance the excitation state with `1.0` instead of the tie multiplicity
+
+**RED on the two tie-heavy tests only**, green on the rest, which is the correct blast
+radius for a bug that only exists at ties.
+
+### Note on what this harness is for
+
+A red result here does not by itself mean a wrong answer — S30's two forms are both
+defensible, and differ by one ulp. It means the two paths have stopped agreeing
+exactly, and either one must be brought back into line or the divergence must be made
+deliberate, in the test and in the doc comment together.
+
 ## Summary
 
 | ID | Harness | What was broken | Result |
@@ -616,6 +667,9 @@ it is the property that makes every other failure in this suite debuggable.
 | S27 | simulator + compensator | the same, applied consistently | mean intensity RED, time rescaling GREEN — unique coverage proven |
 | S28 | simulator | events returned in reverse order | RED |
 | S29 | simulator | caller's RNG ignored | RED on reproducibility alone |
+| S30 | value/gradient agreement | `-exp_m1(-x)` rewritten as `1 - exp(-x)` | GREEN at first — exposed a test gap; RED after the near-horizon case was added |
+| S31 | value/gradient agreement | `alpha` dropped from the value-only combination | RED |
+| S32 | value/gradient agreement | state advanced without the tie multiplicity | RED on tied cases only |
 
 Every harness has been observed both red and green. The working tree after all
 sabotages is byte-identical to before them.

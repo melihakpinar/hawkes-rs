@@ -6,7 +6,8 @@ use std::hint::black_box;
 use std::time::Instant;
 
 use hawk::univariate::{
-    Observation, Parameters, fit, negative_log_likelihood_and_gradient, simulate,
+    Observation, Parameters, fit, negative_log_likelihood, negative_log_likelihood_and_gradient,
+    simulate,
 };
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -57,15 +58,29 @@ fn main() {
         }
         elapsed.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
+        // Value only, the path an objective evaluation now takes.
+        for _ in 0..WARMUP {
+            black_box(negative_log_likelihood(&truth, &observation));
+        }
+        let mut value_only = Vec::with_capacity(TIMED);
+        for _ in 0..TIMED {
+            let start = Instant::now();
+            let value = negative_log_likelihood(&truth, &observation);
+            value_only.push(start.elapsed().as_secs_f64());
+            black_box(value);
+        }
+        value_only.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
         // Evaluation count during a full fit. Deterministic, so one run suffices.
         let fitted = fit(&observation).unwrap();
 
         eprintln!(
-            "n={:<9} events={:<9} eval_median={:.9}s  fit: iters={} obj_evals={} \
-             grad_evals={}",
+            "n={:<9} events={:<9} value+grad={:.9}s  value_only={:.9}s  fit: \
+             iters={} obj_evals={} grad_evals={}",
             nominal,
             times.len(),
             elapsed[TIMED / 2],
+            value_only[TIMED / 2],
             fitted.iterations,
             fitted.objective_evaluations,
             fitted.gradient_evaluations,
@@ -79,6 +94,9 @@ fn main() {
       "eval_seconds_min": {:?},
       "eval_seconds_max": {:?},
       "eval_seconds_all": [{}],
+      "value_only_seconds_median": {:?},
+      "value_only_seconds_min": {:?},
+      "value_only_seconds_max": {:?},
       "fit_iterations": {},
       "fit_objective_evaluations": {},
       "fit_gradient_evaluations": {}
@@ -92,6 +110,9 @@ fn main() {
                 .map(|v| format!("{v:?}"))
                 .collect::<Vec<_>>()
                 .join(", "),
+            value_only[TIMED / 2],
+            value_only[0],
+            value_only[TIMED - 1],
             fitted.iterations,
             fitted.objective_evaluations,
             fitted.gradient_evaluations,

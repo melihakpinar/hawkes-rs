@@ -160,6 +160,37 @@ impl<'a> Observation<'a> {
     }
 }
 
+/// Advances the excitation state across a gap between distinct event times.
+///
+/// Returns `(B_j, exp(-beta*d_j))` — the advanced state (4.4) and the decay factor,
+/// which the gradient path also needs for (G.6).
+///
+/// Shared by both evaluation paths on purpose. This is the arithmetic that decides
+/// the value, so it exists once: the value-only and value-plus-gradient loops cannot
+/// drift on it, only on how they compose it. `bit_identical_evaluation.rs` guards the
+/// composition.
+#[inline(always)]
+fn advance_excitation_state(state: f64, count_at_state: f64, gap: f64, decay: f64) -> (f64, f64) {
+    let gap_decay = (-decay * gap).exp();
+    (gap_decay * (state + count_at_state), gap_decay)
+}
+
+/// `lambda_j = mu + alpha*beta*B_j`.
+#[inline(always)]
+fn intensity_at(baseline: f64, excitation: f64, decay: f64, state: f64) -> f64 {
+    baseline + excitation * decay * state
+}
+
+/// One event's contribution to the compensator's excitation sum,
+/// `1 - exp(-beta*(T - t_k))`.
+///
+/// Written as `-exp_m1(-x)`: for events near the horizon the direct form loses
+/// precision to cancellation (`univariate_loglikelihood.md` §5).
+#[inline(always)]
+fn compensator_contribution(decay: f64, window: f64) -> f64 {
+    -(-decay * window).exp_m1()
+}
+
 /// Partial derivatives of the negative log-likelihood.
 ///
 /// From `docs/derivations/univariate_gradient.md`, equations (G.1), (G.2) and (G.7).
@@ -193,10 +224,65 @@ impl Gradient {
 /// Negative log-likelihood, `O(n)`.
 ///
 /// Transcription of `univariate_loglikelihood.md` (4.5). See
-/// [`negative_log_likelihood_and_gradient`] for the shared implementation and for
-/// what the recursion does about tied timestamps.
+/// [`negative_log_likelihood_and_gradient`] for what the recursion does about tied
+/// timestamps; the same grouped recursion is used here.
+///
+/// # This does not compute the gradient
+///
+/// It is a separate loop, not a call to
+/// [`negative_log_likelihood_and_gradient`] with the gradient thrown away. That
+/// earlier arrangement made a value-only evaluation cost a full value-plus-gradient
+/// pass, which showed up as `hawk` making 36 passes over the data per fit where
+/// `tick` makes 23 (`docs/positioning-probe.md` part 2).
+///
+/// Skipped here relative to the gradient path: the state-derivative recursion (G.6),
+/// one `exp` per event for `exp(-beta*(T - t_k))`, and three divisions per event.
+///
+/// # Bit-identical with the gradient path
+///
+/// The value this returns is **bitwise equal** to the value component of
+/// [`negative_log_likelihood_and_gradient`], not merely close. The arithmetic that
+/// decides it lives in [`advance_excitation_state`], [`intensity_at`] and
+/// [`compensator_contribution`], shared by both loops, and both accumulate in event
+/// order. `hawk/tests/bit_identical_evaluation.rs` enforces it; a change that
+/// perturbs the summation order turns that test red, which is the intended
+/// behaviour.
 pub fn negative_log_likelihood(parameters: &Parameters, observation: &Observation) -> f64 {
-    negative_log_likelihood_and_gradient(parameters, observation).0
+    let mu = parameters.baseline;
+    let alpha = parameters.excitation;
+    let beta = parameters.decay;
+    let horizon = observation.horizon();
+    let times = observation.times();
+
+    if times.is_empty() {
+        return mu * horizon;
+    }
+
+    let mut compensator_excitation = 0.0;
+    let mut log_term = 0.0;
+    let mut excitation_state = 0.0;
+    let mut previous_time = times[0];
+    let mut count_at_previous_time = 0.0f64;
+
+    for &time in times {
+        if time != previous_time {
+            let (advanced, _) = advance_excitation_state(
+                excitation_state,
+                count_at_previous_time,
+                time - previous_time,
+                beta,
+            );
+            excitation_state = advanced;
+            previous_time = time;
+            count_at_previous_time = 0.0;
+        }
+
+        log_term += intensity_at(mu, alpha, beta, excitation_state).ln();
+        compensator_excitation += compensator_contribution(beta, horizon - time);
+        count_at_previous_time += 1.0;
+    }
+
+    mu * horizon + alpha * compensator_excitation - log_term
 }
 
 /// Negative log-likelihood and its analytic gradient, in one `O(n)` pass.
@@ -278,8 +364,8 @@ pub fn negative_log_likelihood_and_gradient(
         if time != previous_time {
             // A new distinct time s_j. Advance the state across the gap.
             let gap = time - previous_time;
-            let gap_decay = (-beta * gap).exp();
-            let advanced = gap_decay * (excitation_state + count_at_previous_time); // (4.4)
+            let (advanced, gap_decay) =
+                advance_excitation_state(excitation_state, count_at_previous_time, gap, beta); // (4.4)
             // (G.6). Must use the advanced value, not the previous one, and must be
             // evaluated before `excitation_state` is overwritten.
             excitation_state_derivative = -gap * advanced + gap_decay * excitation_state_derivative;
@@ -288,14 +374,12 @@ pub fn negative_log_likelihood_and_gradient(
             count_at_previous_time = 0.0;
         }
 
-        let intensity = mu + alpha * beta * excitation_state;
+        let intensity = intensity_at(mu, alpha, beta, excitation_state);
         let window = horizon - time;
         let window_decay = (-beta * window).exp();
 
         log_term += intensity.ln();
-        // `-exp_m1(-x)` rather than `1 - exp(-x)`: for events near the horizon the
-        // direct form loses precision to cancellation (§5's numerical notes).
-        compensator_excitation += -(-beta * window).exp_m1();
+        compensator_excitation += compensator_contribution(beta, window);
         baseline_accumulator += 1.0 / intensity;
         excitation_accumulator += beta * excitation_state / intensity;
         decay_compensator_accumulator += window * window_decay;
