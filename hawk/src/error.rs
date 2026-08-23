@@ -59,6 +59,31 @@ pub enum Error {
     /// The optimizer failed outright, as opposed to stopping without converging.
     #[error("the optimizer failed: {message}")]
     OptimizerFailed { message: String },
+
+    /// A multivariate process needs at least one component.
+    #[error("the process must have at least one component")]
+    EmptyProcess,
+
+    /// `baseline` has one entry per component and `excitation` is square in the same
+    /// dimension.
+    #[error(
+        "dimension mismatch: {what} has length {actual}, expected {expected}          for a {dimension}-component process"
+    )]
+    DimensionMismatch {
+        what: &'static str,
+        actual: usize,
+        expected: usize,
+        dimension: usize,
+    },
+
+    /// Excitation entries may be zero — a component that excites nothing is
+    /// ordinary — but never negative.
+    #[error("excitation[{row}][{column}] must be non-negative and finite, got {value}")]
+    InvalidExcitation {
+        row: usize,
+        column: usize,
+        value: f64,
+    },
 }
 
 impl Error {

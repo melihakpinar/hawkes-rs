@@ -169,15 +169,24 @@ impl<'a> Observation<'a> {
 /// the value, so it exists once: the value-only and value-plus-gradient loops cannot
 /// drift on it, only on how they compose it. `bit_identical_evaluation.rs` guards the
 /// composition.
+///
+/// Also used by [`crate::multivariate`], once per component. That is what makes the
+/// `d = 1` agreement structural rather than a coincidence to be re-checked after every
+/// edit — though `multivariate_equivalence.rs` re-checks it anyway.
 #[inline(always)]
-fn advance_excitation_state(state: f64, count_at_state: f64, gap: f64, decay: f64) -> (f64, f64) {
+pub(crate) fn advance_excitation_state(
+    state: f64,
+    count_at_state: f64,
+    gap: f64,
+    decay: f64,
+) -> (f64, f64) {
     let gap_decay = (-decay * gap).exp();
     (gap_decay * (state + count_at_state), gap_decay)
 }
 
 /// `lambda_j = mu + alpha*beta*B_j`.
 #[inline(always)]
-fn intensity_at(baseline: f64, excitation: f64, decay: f64, state: f64) -> f64 {
+pub(crate) fn intensity_at(baseline: f64, excitation: f64, decay: f64, state: f64) -> f64 {
     baseline + excitation * decay * state
 }
 
@@ -187,7 +196,7 @@ fn intensity_at(baseline: f64, excitation: f64, decay: f64, state: f64) -> f64 {
 /// Written as `-exp_m1(-x)`: for events near the horizon the direct form loses
 /// precision to cancellation (`univariate_loglikelihood.md` §5).
 #[inline(always)]
-fn compensator_contribution(decay: f64, window: f64) -> f64 {
+pub(crate) fn compensator_contribution(decay: f64, window: f64) -> f64 {
     -(-decay * window).exp_m1()
 }
 

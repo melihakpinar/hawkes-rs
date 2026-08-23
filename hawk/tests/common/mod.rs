@@ -3,6 +3,10 @@
 //! Included by several integration-test binaries, each of which uses a different
 //! subset, so unused-item warnings here are expected rather than informative.
 #![allow(dead_code)]
+// Index loops in the multivariate references, for the reason given at the top of
+// `hawk/src/multivariate.rs`: these are transcriptions of indexed formulae and the
+// indices are what a reader checks.
+#![allow(clippy::needless_range_loop)]
 
 use hawk::univariate::{Observation, Parameters};
 
@@ -281,6 +285,250 @@ fn invert_3x3(m: &[[f64; 3]; 3]) -> Option<[[f64; 3]; 3]> {
             let (r0, r1) = ((j + 1) % 3, (j + 2) % 3);
             let (c0, c1) = ((i + 1) % 3, (i + 2) % 3);
             inverse[i][j] = (m[r0][c0] * m[r1][c1] - m[r0][c1] * m[r1][c0]) / determinant;
+        }
+    }
+    Some(inverse)
+}
+
+// ---------------------------------------------------------------- multivariate
+
+use hawk::multivariate::{Observation as MultiObservation, Parameters as MultiParameters};
+
+/// Brute-force `O(n^2)` multivariate negative log-likelihood: a direct transcription
+/// of `docs/derivations/multivariate_loglikelihood.md` (M3.2).
+///
+/// ```text
+/// nll = sum_i mu[i]*T
+///     + sum_i sum_j alpha[i][j] * sum_k ( 1 - exp(-beta*(T - t^j_k)) )
+///     - sum_i sum_k log( mu[i] + sum_j sum_{t^j_l < t^i_k} alpha[i][j]*beta*exp(-beta*(t^i_k - t^j_l)) )
+/// ```
+///
+/// Same rules as the univariate reference: a transcription, not an optimisation. No
+/// pooled walk, no state recursion, no reuse of accumulators. The inner condition is
+/// `t^j_l < t^i_k`, **strict and on times**, which is what makes simultaneous events
+/// on different components not excite each other.
+///
+/// Uses the naive `1.0 - exp(-x)` where the production path uses `exp_m1`, so a bug in
+/// that choice cannot cancel on both sides.
+pub fn brute_force_multivariate_negative_log_likelihood(
+    parameters: &MultiParameters,
+    observation: &MultiObservation,
+) -> f64 {
+    let d = parameters.dimension();
+    let beta = parameters.decay();
+    let horizon = observation.horizon();
+    let events = observation.events();
+
+    let mut total = 0.0;
+    for i in 0..d {
+        total += parameters.baseline()[i] * horizon;
+    }
+    for i in 0..d {
+        for j in 0..d {
+            for &t in &events[j] {
+                total += parameters.excitation_at(i, j) * (1.0 - (-beta * (horizon - t)).exp());
+            }
+        }
+    }
+    for i in 0..d {
+        for &t_k in &events[i] {
+            let mut intensity = parameters.baseline()[i];
+            for j in 0..d {
+                for &t_l in &events[j] {
+                    if t_l < t_k {
+                        intensity +=
+                            parameters.excitation_at(i, j) * beta * (-beta * (t_k - t_l)).exp();
+                    }
+                }
+            }
+            total -= intensity.ln();
+        }
+    }
+    total
+}
+
+/// The scale of the multivariate computation, for use as a comparison denominator.
+///
+/// Same construction and same reasoning as [`computation_scale`]: the sum of the
+/// magnitudes fed into the accumulators, **not** `|nll|`, which is a difference of
+/// large terms and passes through zero.
+pub fn multivariate_computation_scale(
+    parameters: &MultiParameters,
+    observation: &MultiObservation,
+) -> f64 {
+    let d = parameters.dimension();
+    let beta = parameters.decay();
+    let horizon = observation.horizon();
+    let events = observation.events();
+
+    let mut scale = 0.0;
+    for i in 0..d {
+        scale += parameters.baseline()[i] * horizon;
+    }
+    for i in 0..d {
+        for j in 0..d {
+            for &t in &events[j] {
+                scale += parameters.excitation_at(i, j) * (1.0 - (-beta * (horizon - t)).exp());
+            }
+        }
+    }
+    for i in 0..d {
+        for &t_k in &events[i] {
+            let mut intensity = parameters.baseline()[i];
+            for j in 0..d {
+                for &t_l in &events[j] {
+                    if t_l < t_k {
+                        intensity +=
+                            parameters.excitation_at(i, j) * beta * (-beta * (t_k - t_l)).exp();
+                    }
+                }
+            }
+            scale += intensity.ln().abs();
+        }
+    }
+    scale
+}
+
+/// Deterministic pseudo-random multivariate parameters and events, for tests that
+/// must not depend on the simulator.
+pub struct Lcg(u64);
+
+impl Lcg {
+    pub fn new(seed: u64) -> Self {
+        Self(seed | 1)
+    }
+    pub fn next_f64(&mut self) -> f64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        (self.0 >> 11) as f64 / (1u64 << 53) as f64
+    }
+    pub fn next_usize(&mut self, bound: usize) -> usize {
+        (self.next_f64() * bound as f64) as usize % bound.max(1)
+    }
+}
+
+/// Asymptotic standard errors for the multivariate MLE, from the observed Fisher
+/// information, in the flat layout `[baseline (d), excitation (d*d), decay]`.
+///
+/// Same construction and same reasoning as [`asymptotic_standard_errors`]: the
+/// Hessian of the negative log-likelihood at the optimum, obtained by central-
+/// differencing the analytic gradient, inverted. Derived from theory rather than from
+/// this estimator's own scatter, which would be circular.
+///
+/// Returns `None` if the information matrix is singular or any variance is not
+/// positive — which happens when a component has too few events to identify its own
+/// row of `alpha`.
+pub fn multivariate_asymptotic_standard_errors(
+    parameters: &MultiParameters,
+    observation: &MultiObservation,
+) -> Option<Vec<f64>> {
+    let d = parameters.dimension();
+    let n = d + d * d + 1;
+    let mut centre = parameters.baseline().to_vec();
+    centre.extend_from_slice(parameters.excitation());
+    centre.push(parameters.decay());
+
+    let gradient_at = |point: &[f64]| -> Vec<f64> {
+        let p = MultiParameters::new(
+            point[..d].to_vec(),
+            point[d..d + d * d].to_vec(),
+            point[d + d * d],
+        )
+        .expect("valid parameters");
+        let (_, g) = hawk::multivariate::negative_log_likelihood_and_gradient(&p, observation);
+        let mut flat = g.baseline;
+        flat.extend_from_slice(&g.excitation);
+        flat.push(g.decay);
+        flat
+    };
+
+    let mut hessian = vec![0.0f64; n * n];
+    for column in 0..n {
+        // Clamped to half the coordinate, so a near-zero entry -- which is exactly
+        // what a recovered true zero looks like -- is not perturbed below its own
+        // domain. Without the clamp the step for a fitted `alpha` of 1e-9 would be
+        // 1e-8 and the backward point negative.
+        let step = (1e-5 * centre[column].abs().max(1e-3)).min(0.5 * centre[column].abs());
+        if step <= 0.0 || !step.is_finite() {
+            return None;
+        }
+        let mut up = centre.clone();
+        let mut down = centre.clone();
+        up[column] += step;
+        down[column] -= step;
+        if down[column] <= 0.0 {
+            return None;
+        }
+        let g_up = gradient_at(&up);
+        let g_down = gradient_at(&down);
+        for row in 0..n {
+            hessian[row * n + column] = (g_up[row] - g_down[row]) / (2.0 * step);
+        }
+    }
+    for row in 0..n {
+        for column in (row + 1)..n {
+            let mean = 0.5 * (hessian[row * n + column] + hessian[column * n + row]);
+            hessian[row * n + column] = mean;
+            hessian[column * n + row] = mean;
+        }
+    }
+
+    let inverse = invert(&hessian, n)?;
+    let mut errors = Vec::with_capacity(n);
+    for i in 0..n {
+        let variance = inverse[i * n + i];
+        if !variance.is_finite() || variance <= 0.0 {
+            return None;
+        }
+        errors.push(variance.sqrt());
+    }
+    Some(errors)
+}
+
+/// Gauss-Jordan inverse with partial pivoting, row-major `n x n`.
+fn invert(matrix: &[f64], n: usize) -> Option<Vec<f64>> {
+    let mut augmented = vec![0.0f64; n * 2 * n];
+    for row in 0..n {
+        for column in 0..n {
+            augmented[row * 2 * n + column] = matrix[row * n + column];
+        }
+        augmented[row * 2 * n + n + row] = 1.0;
+    }
+    for column in 0..n {
+        let pivot_row = (column..n).max_by(|&a, &b| {
+            augmented[a * 2 * n + column]
+                .abs()
+                .partial_cmp(&augmented[b * 2 * n + column].abs())
+                .unwrap()
+        })?;
+        if augmented[pivot_row * 2 * n + column].abs() < 1e-300 {
+            return None;
+        }
+        for k in 0..2 * n {
+            augmented.swap(column * 2 * n + k, pivot_row * 2 * n + k);
+        }
+        let pivot = augmented[column * 2 * n + column];
+        for k in 0..2 * n {
+            augmented[column * 2 * n + k] /= pivot;
+        }
+        for row in 0..n {
+            if row == column {
+                continue;
+            }
+            let factor = augmented[row * 2 * n + column];
+            if factor == 0.0 {
+                continue;
+            }
+            for k in 0..2 * n {
+                augmented[row * 2 * n + k] -= factor * augmented[column * 2 * n + k];
+            }
+        }
+    }
+    let mut inverse = vec![0.0f64; n * n];
+    for row in 0..n {
+        for column in 0..n {
+            inverse[row * n + column] = augmented[row * 2 * n + n + column];
         }
     }
     Some(inverse)

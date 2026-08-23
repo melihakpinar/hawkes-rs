@@ -17,9 +17,13 @@
 //! which is OQ-8, closed here (M1 Part B step 9). The M0 stub that played the
 //! recorded value back is gone; this now runs `hawk`'s own implementation.
 //!
-//! `hawk` is univariate in M1, so only the univariate fixtures are compared. The
-//! multivariate ones are still parsed and structurally validated, and become
-//! comparable in M2.
+//! Every fixture is compared, at `d` in {1, 2, 3, 10}.
+//!
+//! `D` varying is not incidental. At a single `d` the offset `D*T` cannot be
+//! distinguished from `3*T`, or from any other multiple that happens to coincide
+//! there — a test that passes for one `D` is not testing the offset. The corpus
+//! carries `D*T` values of 20, 200, 2000, 600, 800, 1500 and 3000, and this test
+//! asserts that several distinct `D` are actually exercised.
 //!
 //! # Why this comes last
 //!
@@ -38,11 +42,12 @@
 use std::fs;
 use std::path::PathBuf;
 
+use hawk::multivariate;
 use hawk::univariate::{Observation, Parameters, negative_log_likelihood};
 use serde::Deserialize;
 
 mod common;
-use common::computation_scale;
+use common::multivariate_computation_scale as multivariate_scale;
 
 /// Tolerance for checking that a fixture's flat `coeffs` vector agrees with its
 /// `baseline` and `adjacency` fields. Both are written by the same generator from
@@ -141,43 +146,48 @@ fn differential_against_tick() {
     let mut compared = 0;
     let mut with_excitation = 0;
     let mut tied = 0;
+    let mut dimensions = std::collections::BTreeSet::new();
 
     for fixture in &fixtures {
-        if fixture.n_nodes != 1 {
-            continue; // multivariate arrives in M2
-        }
-        let times = &fixture.events[0];
-        let observation = Observation::new(times, fixture.end_time).unwrap_or_else(|e| {
-            panic!("{}: fixture violates the input contract: {e}", fixture.name)
-        });
+        let observation = multivariate::Observation::new(&fixture.events, fixture.end_time)
+            .unwrap_or_else(|e| {
+                panic!("{}: fixture violates the input contract: {e}", fixture.name)
+            });
 
         for evaluation in &fixture.evaluations {
-            let parameters = Parameters::new(
-                evaluation.baseline[0],
-                evaluation.adjacency[0][0],
+            // Row-major, `excitation[i*d + j]` = "j excites i", matching the fixture's
+            // `adjacency[i][j]` (conventions.md C6).
+            let excitation: Vec<f64> = evaluation.adjacency.iter().flatten().copied().collect();
+            let parameters = multivariate::Parameters::new(
+                evaluation.baseline.clone(),
+                excitation,
                 fixture.decay,
             )
             .unwrap_or_else(|e| panic!("{}: {e}", fixture.name));
 
-            let hawk_nll = negative_log_likelihood(&parameters, &observation);
+            let hawk_nll = multivariate::negative_log_likelihood(&parameters, &observation);
             // OQ-8: tick's loss is the negative log-likelihood ratio against a
-            // unit-rate Poisson process, divided by n_jumps. Undoing both gives the
-            // plain negative log-likelihood.
+            // unit-rate Poisson, divided by n_jumps. Undoing both gives the plain
+            // negative log-likelihood. `D` is the number of components.
             let from_tick = evaluation.tick_loss * (fixture.n_jumps as f64)
                 + (fixture.n_nodes as f64) * fixture.end_time;
 
-            let scale = computation_scale(&parameters, &observation);
+            let scale = multivariate_scale(&parameters, &observation);
             let discrepancy = (hawk_nll - from_tick).abs();
             assert!(
                 discrepancy <= TICK_TOLERANCE * scale,
-                "{}/{}: hawk {hawk_nll:?} vs tick_loss*n_jumps + D*T {from_tick:?}, \
-                 |difference| {discrepancy:e} > {TICK_TOLERANCE:e} * scale {scale:e}",
+                "{}/{} (d={}): hawk {hawk_nll:?} vs tick_loss*n_jumps + D*T \
+                 {from_tick:?}, |difference| {discrepancy:e} > {TICK_TOLERANCE:e} \
+                 * scale {scale:e}. D*T here is {:?}.",
                 fixture.name,
                 evaluation.label,
+                fixture.n_nodes,
+                (fixture.n_nodes as f64) * fixture.end_time,
             );
 
             compared += 1;
-            if evaluation.adjacency[0][0] != 0.0 {
+            dimensions.insert(fixture.n_nodes);
+            if evaluation.adjacency.iter().flatten().any(|&a| a != 0.0) {
                 with_excitation += 1;
             }
             if fixture.has_ties {
@@ -187,18 +197,75 @@ fn differential_against_tick() {
     }
 
     // Guards against the harness passing because it swept nothing, and against the
-    // corpus losing the cases that make the comparison meaningful. OQ-8 was open
-    // precisely because M0 could only confirm the offset at `alpha == 0`.
-    assert!(compared >= 20, "only compared {compared} points");
+    // corpus losing the cases that make the comparison meaningful.
+    assert!(compared >= 40, "only compared {compared} points");
     assert!(
-        with_excitation >= 15,
-        "only {with_excitation} points had alpha != 0; the offset is trivially \
-         confirmed at alpha == 0 and that is what left OQ-8 open"
+        with_excitation >= 30,
+        "only {with_excitation} points had a non-zero excitation; the offset is \
+         trivially confirmed at alpha == 0 and that is what left OQ-8 open"
     );
     assert!(
         tied >= 8,
         "only {tied} tied points; ties are an independent witness"
     );
+    // The offset is D*T. With one value of D it cannot be distinguished from a
+    // constant multiple of T, so several are required.
+    assert!(
+        dimensions.len() >= 4,
+        "compared only {} distinct dimensions ({dimensions:?}); D must vary or the \
+         D*T offset is not what is being tested",
+        dimensions.len()
+    );
+    assert!(
+        dimensions.contains(&10),
+        "the d = 10 fixture is missing; it is the widest separation of D in the corpus"
+    );
+}
+
+/// The univariate path must agree with the multivariate one on the univariate
+/// fixtures. `multivariate_equivalence.rs` proves that in general; this checks it on
+/// the committed corpus, against `tick`-derived values rather than synthetic ones.
+#[test]
+fn univariate_path_agrees_on_the_univariate_fixtures() {
+    let fixtures = load_fixtures();
+    let mut checked = 0;
+    for fixture in &fixtures {
+        if fixture.n_nodes != 1 {
+            continue;
+        }
+        let observation = Observation::new(&fixture.events[0], fixture.end_time).unwrap();
+        for evaluation in &fixture.evaluations {
+            let parameters = Parameters::new(
+                evaluation.baseline[0],
+                evaluation.adjacency[0][0],
+                fixture.decay,
+            )
+            .unwrap();
+            let univariate_value = negative_log_likelihood(&parameters, &observation);
+
+            let multi_observation =
+                multivariate::Observation::new(&fixture.events, fixture.end_time).unwrap();
+            let multi_parameters = multivariate::Parameters::new(
+                evaluation.baseline.clone(),
+                vec![evaluation.adjacency[0][0]],
+                fixture.decay,
+            )
+            .unwrap();
+            let multivariate_value =
+                multivariate::negative_log_likelihood(&multi_parameters, &multi_observation);
+
+            assert_eq!(
+                univariate_value.to_bits(),
+                multivariate_value.to_bits(),
+                "{}/{}: univariate {univariate_value:?} vs multivariate \
+                 {multivariate_value:?}",
+                fixture.name,
+                evaluation.label
+            );
+            checked += 1;
+        }
+    }
+    assert!(checked >= 20, "only checked {checked} univariate points");
 }
 
 #[test]

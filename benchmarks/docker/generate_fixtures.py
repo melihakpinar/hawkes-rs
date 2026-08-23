@@ -92,6 +92,40 @@ SCENARIOS = [
     },
 ]
 
+def circulant_scenario():
+    """A d = 10 scenario, built by rule so the matrix is reproducible and checkable.
+
+    `tick` differential tests at d = 3 cannot distinguish an offset of `D*T` from one of
+    `3*T`; the OQ-8 identity is only pinned by varying `D`. This is the second value of
+    `D` in the corpus (M2 Part B step 12).
+
+    The adjacency is circulant and asymmetric: each component is excited by itself, by
+    its successor, and by the component three ahead. Row sums are 0.45, and for a
+    circulant non-negative matrix the spectral radius equals the row sum, so the process
+    is stationary with margin. Asymmetry matters: alpha[i][i+1] = 0.30 while
+    alpha[i+1][i] = 0, so a transposed matrix is detectable.
+    """
+    d = 10
+    adjacency = [[0.0] * d for _ in range(d)]
+    for i in range(d):
+        adjacency[i][i] += 0.05
+        adjacency[i][(i + 1) % d] += 0.30
+        adjacency[i][(i + 3) % d] += 0.10
+    return {
+        "name": "decavariate_circulant",
+        "description": (
+            "Hand-specified d = 10, circulant and asymmetric. Gives the corpus a "
+            "second value of D so the D*T offset in the OQ-8 identity is pinned "
+            "rather than coincidental."
+        ),
+        "baseline": [0.10 + 0.02 * i for i in range(d)],
+        "adjacency": adjacency,
+        "decay": 1.0,
+        "end_time": 300.0,
+        "seed": 20240007,
+    }
+
+
 # Scenarios with exact ties. These cannot come from the simulator: Ogata thinning
 # draws continuous inter-arrival times, so it never produces two events at the same
 # instant. They are constructed by hand and only their oracle values come from tick.
@@ -284,7 +318,7 @@ def main():
     args.out.mkdir(parents=True, exist_ok=True)
 
     failures = 0
-    for scenario in SCENARIOS + TIED_SCENARIOS:
+    for scenario in SCENARIOS + [circulant_scenario()] + TIED_SCENARIOS:
         fixture = build(scenario)
         text = render(fixture)
         path = args.out / f"{scenario['name']}.json"
