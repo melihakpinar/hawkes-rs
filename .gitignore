@@ -29,3 +29,6 @@ docs/references/*.pdf
 # Python bytecode from the benchmark scripts
 __pycache__/
 *.py[cod]
+
+# Positioning probe scratch (venv and generated event files)
+target/positioning-probe*/
