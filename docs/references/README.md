@@ -8,6 +8,12 @@ a freely accessible source:
 | Key | Paper | Where to get it |
 | --- | --- | --- |
 | `Laub2015` | Laub, P. J., Taimre, T. & Pollett, P. K. (2015). *Hawkes Processes.* arXiv:1507.02822v1 | <https://arxiv.org/abs/1507.02822> — file `1507.02822v1.pdf` |
+| `Bacry2015` | Bacry, E., Mastromatteo, I. & Muzy, J.-F. (2015). *Hawkes processes in finance.* arXiv:1502.04592 | <https://arxiv.org/abs/1502.04592> — PDF not committed |
+
+From `Bacry2015`: Proposition 1 (stationarity, spectral radius of the kernel-norm
+matrix below 1), Proposition 4 eq. 21 with eq. 17 (stationary mean intensity). Cited by
+`multivariate_loglikelihood.md` §7. Freely accessible on arXiv, which is what CLAUDE.md
+§2 requires; the PDF is not committed because `.gitignore` excludes PDFs here.
 
 The equations relied on so far: eq. 4 (exponential-kernel intensity), eq. 5 (branching
 ratio), eq. 6 (stationary mean intensity), Theorem 3 (likelihood on `[0, T]`), eq. 17

@@ -23,6 +23,9 @@ derivation; that separation is the entire point.
 | `univariate_loglikelihood.md` | Awaiting owner approval. Intensity, compensator, and the O(n) recursion with ties handled. |
 | `univariate_gradient.md` | Awaiting owner approval. Partials w.r.t. `mu`, `alpha`, `beta`, including the recursive state derivative. |
 | `check_univariate_derivation.py` | Throwaway consistency check for the two above. Not `hawk` code; `python3` with no dependencies. |
+| `multivariate_loglikelihood.md` | Awaiting owner approval. `d` dimensions: intensity, compensator, and the recursion grouped over distinct times pooled across all components. |
+| `multivariate_gradient.md` | Awaiting owner approval. Partials w.r.t. `mu[i]`, `alpha[i][j]` and `beta`, with the per-component state-derivative recursion. |
+| `check_multivariate_derivation.py` | Throwaway consistency check for the two above, including the `d = 1` bitwise reduction. |
 
 Anything that a source does not settle does not belong here. It belongs in
 `docs/open-questions.md`.
