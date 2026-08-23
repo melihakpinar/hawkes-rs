@@ -252,3 +252,171 @@ Listed so the numbers are not read past their scope.
   could not be run on the same footing on either side.
 - Memory, allocation behaviour, or startup cost.
 - Accuracy, bias or variance of either estimator.
+
+---
+
+# Part 2: inner-loop cost, with the optimizer and the parameter count removed
+
+Part 1 compared whole fits, and §5 recorded that the two sides solve different problems
+with different optimizers and different stopping rules. This part measures one
+objective evaluation, which removes all three of those.
+
+Measurement only. No recommendation and no interpretation.
+
+## 12. Methodology, part 2
+
+Unchanged from §2-§4 except as noted: same machine, both native `arm64`,
+single-threaded, median of 5 timed calls after 1 discarded warmup, identical event data
+generated once by `hawk`'s simulator and read from disk by both sides.
+
+### What is timed
+
+| | |
+| --- | --- |
+| `hawk` | one `negative_log_likelihood_and_gradient` call |
+| `tick` | one `ModelHawkesExpKernLogLik.loss_and_grad` call |
+
+`loss_and_grad` is used rather than `loss()` then `grad()` because it is `tick`'s
+single-pass entry point, matching `hawk`, which returns value and gradient from one
+pass. Separate `loss()` and `grad()` timings are reported alongside.
+
+Both are evaluated at the same point, the true parameters
+`(mu, alpha, beta) = (0.5, 0.6, 1.0)`.
+
+`n` is 1e4, 1e5, 1e6. The 1e3 case from part 1 is dropped: at that size the timed
+region is a few microseconds and is dominated by call overhead.
+
+### Two asymmetries remain
+
+- **Gradient dimension.** `hawk` returns a 3-component gradient
+  (`mu`, `alpha`, `beta`); `tick` returns 2 (`mu`, `alpha`), because it has no
+  derivative with respect to the decay (§5.1).
+- **`hawk`'s objective evaluation is not cheaper than its gradient evaluation.**
+  `negative_log_likelihood` delegates to `negative_log_likelihood_and_gradient` and
+  discards the gradient, so both cost one full pass. `tick`'s `loss()` and `grad()` are
+  separate passes with different costs, both reported below.
+
+## 13. Single evaluation, wall clock
+
+Seconds. Median of 5 after 1 warmup; `[min, max]` of the same 5. `tick`'s figures are
+**steady state**, i.e. with its weight cache already populated — see §15. The ratio
+column is `hawk / tick loss_and_grad`, arithmetic only.
+
+| nominal `n` | events | `hawk` value+grad | `hawk` [min, max] | `tick` `loss_and_grad` | `tick` [min, max] | ratio |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1e4 | 10 079 | 0.000403625 | [0.000379667, 0.000877875] | 0.000176042 | [0.000173500, 0.000177917] | 2.29 |
+| 1e5 | 100 041 | 0.002907958 | [0.002676125, 0.003072792] | 0.001533417 | [0.001532834, 0.001546125] | 1.90 |
+| 1e6 | 998 244 | 0.026231625 | [0.026192125, 0.026328583] | 0.015208333 | [0.015038167, 0.015213125] | 1.72 |
+
+`tick`, `loss()` and `grad()` timed separately (steady state):
+
+| nominal `n` | `loss()` | `grad()` | sum | `loss_and_grad` |
+| --- | --- | --- | --- | --- |
+| 1e4 | 0.000096750 | 0.000076417 | 0.000173167 | 0.000176042 |
+| 1e5 | 0.000959000 | 0.000563167 | 0.001522167 | 0.001533417 |
+| 1e6 | 0.009753583 | 0.005435959 | 0.015189542 | 0.015208333 |
+
+## 14. Objective evaluations per fit
+
+Evaluations, not iterations: line-search trials are counted.
+
+`hawk`, from `Fit::objective_evaluations` and `Fit::gradient_evaluations`, added for
+this measurement. `tick`, from `n_calls_loss`, `n_calls_grad` and `n_passes_over_data`
+on the model object underlying `HawkesExpKern`, using the part 1 fit configuration.
+
+| nominal `n` | `hawk` iters | `hawk` objective | `hawk` gradient | `hawk` total passes | `tick` `loss` | `tick` `grad` | `tick` passes over data |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1e4 | 10 | 12 | 22 | 34 | 13 | 10 | 23 |
+| 1e5 | 10 | 13 | 23 | 36 | 13 | 10 | 23 |
+| 1e6 | 10 | 13 | 23 | 36 | 13 | 10 | 23 |
+
+Per §12, each of `hawk`'s 34-36 passes computes value and gradient together. `tick`'s
+23 passes are 13 value-only and 10 gradient-only, whose separate costs are in §13.
+
+### Arithmetic cross-check against part 1
+
+Passes times per-pass cost, against the part 1 fit medians. Multiplication only.
+
+| nominal `n` | side | passes x per-pass | product | part 1 fit median |
+| --- | --- | --- | --- | --- |
+| 1e6 | `hawk` | 36 x 0.026231625 | 0.944 | 1.003165 |
+| 1e6 | `tick` | 13 x 0.009753583 + 10 x 0.005435959 | 0.181 | 0.272880 |
+
+## 15. The weight-cache hypothesis: confirmed, from source
+
+The hypothesis was that `tick` precomputes and caches the `exp(-beta*d)` terms across
+the optimization, because `beta` is fixed for it.
+
+**This was established directly, not indirectly.** `tick`'s C++ is published; the
+installed version has a matching tag, `v0.8.0.2`.
+
+`lib/cpp/hawkes/model/model_hawkes_expkern_loglik_single.cpp` computes, for every
+event, arrays `g` (excitation state) and `G` (compensator increments), holding the
+exponential terms:
+
+```cpp
+const double ebt = std::exp(-decay * (t_i_k - t_i[k - 1]));
+if (k < n_jumps_i)
+  g_i[k * n_nodes + j] = g_i[(k - 1) * n_nodes + j] * ebt;
+G_i[k * n_nodes + j] = g_i[(k - 1) * n_nodes + j] * (1 - ebt) / decay;
+```
+
+`lib/cpp/hawkes/model/base/model_hawkes_loglik_single.cpp` guards it with a flag, and
+every entry point begins the same way:
+
+```cpp
+void ModelHawkesLogLikSingle::compute_weights() {
+  ...
+  weights_computed = true;
+}
+double ModelHawkesLogLikSingle::loss(const ArrayDouble &coeffs) {
+  if (!weights_computed) compute_weights();
+  ...
+}
+```
+
+`loss`, `grad`, `loss_i`, `grad_i`, `loss_and_grad` and `hessian_norm` all open with
+`if (!weights_computed) compute_weights();`. So the exponentials are computed once,
+lazily on first use, and reused by every later call.
+
+`lib/include/tick/hawkes/model/model_hawkes_expkern_loglik_single.h` shows the cache is
+invalidated when the decay changes:
+
+```cpp
+void set_decay(double decay) {
+  this->decay = decay;
+  weights_computed = false;
+}
+```
+
+### Timing corroboration
+
+The indirect test was run anyway, and agrees. Seconds, median of 5.
+
+| nominal `n` | `set_data` | first `loss()` after `set_data` | subsequent `loss()` | ratio | first `loss()` after changing `decay` | steady `loss()` same object | ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1e4 | 0.000013833 | 0.000200459 | 0.000103188 | 1.94 | 0.000189959 | 0.000096875 | 1.96 |
+| 1e5 | 0.000012875 | 0.001815042 | 0.000969270 | 1.87 | 0.001798459 | 0.000954833 | 1.88 |
+| 1e6 | 0.000013250 | 0.024014625 | 0.009569563 | 2.51 | 0.024383750 | 0.009558125 | 2.55 |
+
+`set_data` is ~13 microseconds at every `n`, including `n = 1e6`, so it does not do the
+work. The first `loss()` after it is 1.9-2.5x the subsequent ones, and mutating `decay`
+restores that penalty on the next call — matching `set_decay` clearing
+`weights_computed`.
+
+### Consequence for §13
+
+`tick`'s §13 figures are steady-state, so they exclude the cached work. The cold figure
+is the "first `loss()`" column above. At `n = 1e6` that is 0.024014625 against `hawk`'s
+0.026231625.
+
+## 16. What part 2 does not establish
+
+- Memory. `tick`'s cache is `g` and `G` over all events; its size is not measured here,
+  and neither is `hawk`'s allocation behaviour.
+- Whether either evaluation could be faster. Only what they currently cost was measured.
+- Anything about multivariate models, other parameter values, other `n`, or data not
+  generated by `hawk`'s simulator.
+- Accuracy. Both were evaluated at the same point; the values returned were not
+  compared here. Part 1 §9 covers agreement of fitted parameters.
+- Why the ratio in §13 moves with `n`.

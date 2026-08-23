@@ -20,6 +20,8 @@ First public API. `hawk::univariate`:
 - `simulate` — Ogata thinning [Laub2015, Algorithm 2].
 - `fit` — maximum likelihood by L-BFGS in log-parameter space, with the branching
   ratio reported as a diagnostic rather than enforced.
+- `Fit::objective_evaluations` and `Fit::gradient_evaluations` — evaluation counts for
+  a fit, counting line-search trials rather than iterations.
 
 ### Verification
 

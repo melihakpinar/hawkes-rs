@@ -455,6 +455,19 @@ pub struct Fit {
     /// Infinity norm of the per-event log-space gradient at the result, the quantity
     /// [`Fit::converged`] thresholds.
     pub gradient_norm: f64,
+
+    /// Number of objective evaluations, i.e. calls to the negative log-likelihood.
+    ///
+    /// Counts **evaluations, not iterations**. A quasi-Newton iteration performs one
+    /// or more line-search trials, and each trial is an evaluation, so this is
+    /// strictly larger than [`Fit::iterations`] and is the quantity that determines
+    /// how much work a fit actually does.
+    pub objective_evaluations: u64,
+
+    /// Number of gradient evaluations. Counted separately from
+    /// [`Fit::objective_evaluations`] because the solver does not necessarily request
+    /// both at every point.
+    pub gradient_evaluations: u64,
 }
 
 impl Fit {
@@ -508,6 +521,8 @@ pub fn fit(observation: &Observation) -> Result<Fit, Error> {
 
     struct Problem<'a, 'b> {
         observation: &'a Observation<'b>,
+        objective_calls: std::sync::Arc<std::sync::atomic::AtomicU64>,
+        gradient_calls: std::sync::Arc<std::sync::atomic::AtomicU64>,
         /// The objective is divided by the event count, so the optimizer minimizes
         /// the negative log-likelihood **per event**.
         ///
@@ -545,6 +560,8 @@ pub fn fit(observation: &Observation) -> Result<Fit, Error> {
         type Output = f64;
 
         fn cost(&self, log_parameters: &Self::Param) -> Result<f64, argmin::core::Error> {
+            self.objective_calls
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             Ok(
                 negative_log_likelihood(&self.parameters(log_parameters), self.observation)
                     / self.scale,
@@ -557,6 +574,8 @@ pub fn fit(observation: &Observation) -> Result<Fit, Error> {
         type Gradient = Vec<f64>;
 
         fn gradient(&self, log_parameters: &Self::Param) -> Result<Vec<f64>, argmin::core::Error> {
+            self.gradient_calls
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let parameters = self.parameters(log_parameters);
             let (_, gradient) = negative_log_likelihood_and_gradient(&parameters, self.observation);
             let log_gradient = gradient.to_log_parameter_space(&parameters);
@@ -595,8 +614,12 @@ pub fn fit(observation: &Observation) -> Result<Fit, Error> {
             message: e.to_string(),
         })?;
 
+    let objective_calls = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let gradient_calls = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
     let problem = Problem {
         observation,
+        objective_calls: std::sync::Arc::clone(&objective_calls),
+        gradient_calls: std::sync::Arc::clone(&gradient_calls),
         scale: observation.len() as f64,
     };
     let result = Executor::new(problem, solver)
@@ -634,5 +657,7 @@ pub fn fit(observation: &Observation) -> Result<Fit, Error> {
         // it is at the optimum for every practical purpose.
         converged: gradient_norm < 1e-6,
         gradient_norm,
+        objective_evaluations: objective_calls.load(std::sync::atomic::Ordering::Relaxed),
+        gradient_evaluations: gradient_calls.load(std::sync::atomic::Ordering::Relaxed),
     })
 }
