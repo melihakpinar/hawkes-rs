@@ -166,6 +166,19 @@ impl Parameters {
     /// matrix aperiodic. Without the shift a periodic matrix such as
     /// `[[0, 2], [0.9, 0]]` oscillates forever between the bounds `0.9` and `2` and
     /// never converges — also in the tests.
+    ///
+    /// # Accuracy
+    ///
+    /// Exact to `1e-9` or better for diagonalizable matrices, which is every case the
+    /// tests pin by hand.
+    ///
+    /// **Defective** matrices — a repeated eigenvalue with too few eigenvectors, such
+    /// as `[[0.4, 7], [0, 0.4]]` — converge sublinearly, like `1/k` rather than
+    /// geometrically, and land within about `3e-4` at the iteration cap. That is
+    /// immaterial for the use this value has: deciding `rho < 1`, and reporting a
+    /// diagnostic. It would matter to a caller reading it as a precise quantity, so it
+    /// is stated rather than left to be discovered. `spectral_radius.rs` pins the
+    /// defective cases at that looser tolerance and says why.
     pub fn branching_ratio_spectral_radius(&self) -> f64 {
         let d = self.dimension();
         let shifted =
@@ -174,7 +187,6 @@ impl Parameters {
         let mut x = vec![1.0f64; d];
         let mut lower = 0.0f64;
         let mut upper = f64::INFINITY;
-        let mut previous_upper = f64::INFINITY;
 
         // Geometric convergence; the cap is a backstop, not the expected exit.
         for _ in 0..10_000 {
@@ -194,15 +206,16 @@ impl Parameters {
                 lower = lower.min(ratio);
                 upper = upper.max(ratio);
             }
-            // Both bounds are rigorous at every step, so stopping early is safe.
-            // Either the bracket closes (irreducible) or the upper bound stops
-            // moving (reducible, where the lower bound never catches up).
-            if upper - lower <= 1e-14 * upper.max(1.0)
-                || (previous_upper - upper).abs() <= 1e-15 * upper.max(1.0)
-            {
+            // Both bounds are rigorous at every step, so stopping when the bracket
+            // closes is safe. There is deliberately NO "the upper bound stopped
+            // moving" exit: the upper bound can plateau for a few iterations and then
+            // resume falling. On the nilpotent matrix `[[0,1,0],[0,0,1],[0,0,0]]` it
+            // sits at 2 for two steps before descending towards 1, and exiting there
+            // returned a spectral radius of 1.0 for a matrix whose radius is 0 — a
+            // trivially stationary process reported as explosive.
+            if upper - lower <= 1e-14 * upper.max(1.0) {
                 break;
             }
-            previous_upper = upper;
             let norm: f64 = y.iter().sum();
             if norm == 0.0 || !norm.is_finite() {
                 break;

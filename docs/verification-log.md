@@ -801,6 +801,53 @@ two to three orders of magnitude" is more useful to the repository than an absen
 because the component-major accumulation it forced is what any future parallel path
 will need.
 
+## Harness 20 — the spectral radius on reducible matrices (issue #20)
+
+`hawk/tests/spectral_radius.rs`. The Collatz-Wielandt midpoint bug was found by a
+hand-written case rather than by a sabotage, and nothing pinned the class it belonged
+to. This file pins it: diagonal, block-diagonal and triangular matrices, every expected
+value computed by hand.
+
+### S44 — return the bracket midpoint instead of the upper bound
+
+The original defect, restored.
+
+**RED on `diagonal_matrices`, `block_diagonal_matrices` and `triangular_matrices`;
+GREEN on `irreducible_matrices_are_unaffected`.** That split is the whole point: the
+midpoint is correct for irreducible matrices and wrong only for reducible ones, so a
+test set without reducible cases would have accepted it. `diag(0.1, 0.9)` reports
+`0.45` against `0.9`.
+
+### The second bug, found by widening the case set
+
+The first version of this file omitted **defective** matrices — repeated eigenvalues
+with too few eigenvectors — because power iteration is known to converge slowly on
+them and the cases looked likely to be about tolerance rather than correctness.
+
+Adding them anyway, per CLAUDE.md §3's rule about widening to the regime where a
+method is weakest, found that
+`branching_ratio_spectral_radius` returned **`1.0` for the nilpotent matrix
+`[[0,1,0],[0,0,1],[0,0,0]]`, whose spectral radius is `0`**. A trivially stationary
+process — a cascade that dies out after three steps — was being reported as explosive,
+and `stationary_mean_intensity` would have returned `None` for it.
+
+The cause was a "the upper bound stopped moving" early exit. On that matrix the upper
+bound sits at `2` for two consecutive iterations before descending towards `1`, and the
+exit fired there. It has been removed: only the bracket closing, or the iteration cap,
+now stops the loop. The nilpotent case returns `2.0e-4` instead of `1.0`.
+
+### S45 — restore that early exit
+
+**RED on `defective_matrices` and `a_nilpotent_cascade_is_stationary` alone**, with all
+five other tests green — so the regression is pinned exactly where it lives.
+
+### Accuracy, stated rather than left to be found
+
+Defective matrices converge sublinearly and land within about `3e-4` at the iteration
+cap, against `1e-9` or better for everything else. That is immaterial for deciding
+`rho < 1`, which is what the value is for, and it is now in the doc comment and pinned
+by `DEFECTIVE_TOLERANCE` rather than hidden by omitting the cases.
+
 ## Summary
 
 | ID | Harness | What was broken | Result |
@@ -849,6 +896,8 @@ will need.
 | S41 | stationarity | spectral-radius check removed | RED on the non-stationary case alone |
 | S42 | fit parameter space | log coordinate for `excitation` treated as natural | RED on 3 of 4 |
 | S43 | parallel path | per-component parts combined in reverse order | RED on the randomized case, by one ulp; fixed shapes stayed green |
+| S44 | spectral radius | bracket midpoint instead of the upper bound | RED on the reducible cases, GREEN on irreducible |
+| S45 | spectral radius | "upper bound stopped moving" early exit restored | RED on the defective cases alone |
 
 Every harness has been observed both red and green. The working tree after all
 sabotages is byte-identical to before them.
