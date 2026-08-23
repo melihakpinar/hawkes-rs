@@ -307,34 +307,46 @@ upstream.
 
 ---
 
-## OQ-10 — The premise that `tick` is unusable on modern Python is falsified · OPEN
+## OQ-10 — The premise that `tick` is unusable on modern Python is falsified · RESOLVED (positioning probe)
 
-**Question.** CLAUDE.md's preamble states this project exists because `tick` "is
-unmaintained and its estimators break on Python 3.13+". M0 found that `tick`
-0.8.0.2 (published with wheels through CPython 3.14, `requires_python >= 3.11`)
-imports, simulates and fits successfully on CPython 3.13.5, once OQ-9's missing
-dependency is installed. The oracle image does exactly this and its smoke test
-passes.
+**Question.** CLAUDE.md's preamble stated this project exists because `tick` "is
+unmaintained and its estimators break on Python 3.13+". M0 found that `tick` 0.8.0.2
+imports, simulates and fits on CPython 3.13.5 once OQ-9's missing dependency is
+installed, and ships wheels through CPython 3.14. The entry asked whether v0.1.0's
+positioning should change.
 
-**What is and is not falsified.**
+**Resolved: the premise was wrong and the positioning has moved.** The preamble no
+longer claims it. What replaced it is a list of reasons that were each measured rather
+than assumed.
 
-- Falsified: "breaks on Python 3.13+". It does not.
-- Falsified: "unmaintained". 0.8.0.0 through 0.8.0.2 postdate the 0.7.0.1 release
-  the premise appears to refer to, and they add 3.11-3.14 wheels.
-- Not assessed: "no Rust crate does estimation at all". Not investigated in M0.
-- Standing regardless: `tick` ships real defects (OQ-9; several `__repr__`
-  implementations raise on unfitted objects; `HawkesExpKern` cannot express an
-  observation window, OQ-5; `gofit="likelihood"` is unusable through the documented
-  learner interface because it installs a prox that admits negative coefficients,
-  and the C++ model then rejects them).
+### What the measurements established
 
-**Why this is filed rather than acted on.** It is a question about the project's
-rationale and scope, which is the repository owner's call, not a mathematical
-question this agent should resolve. M0's deliverables are unaffected either way: the
-verification machinery is what makes `tick` usable as an oracle, and a *maintained*
-oracle makes the differential tests stronger, not weaker.
+- **`tick` is maintained.** 0.8.0.0 through 0.8.0.2 postdate the 0.7.0.1 release the
+  premise appears to refer to, and add CPython 3.11-3.14 wheels including
+  `macosx_11_0_arm64`.
+- **`tick` is faster on this workload**, by roughly 3x at `n = 1e6` on the univariate
+  exponential-kernel fit (`docs/positioning-probe.md` §20: 0.853 s against 0.274 s).
+  Its C++ precomputes and caches the `exp(-beta*d)` terms because `beta` is fixed for
+  it, confirmed from source at tag `v0.8.0.2` and corroborated by timing (§15).
+  **Speed is not this library's claim.**
 
-**Needs a decision from the owner** on whether v0.1.0's positioning should change.
+### The reasons that survived, each with its evidence
+
+| Reason | Evidence |
+| --- | --- |
+| No Rust crate does Hawkes estimation at all | Unchanged; not re-investigated here |
+| `tick`'s learner cannot express an observation window, so its baseline is biased whenever the window has trailing dead time | OQ-5, `conventions.md` C5. `HawkesExpKern.fit()` takes no `end_times` argument |
+| `tick`'s loss is neither the log-likelihood nor its own documented formula | OQ-8, `conventions.md` C7. Off by a factor of `n_jumps` and an offset of `D*T` |
+| `tick`'s documented likelihood-fitting interface does not work | `penalty="none"` raises on BFGS; `gd`/`agd` reject the resulting negative coefficients. `docs/positioning-probe.md` §5.2 |
+| `tick` cannot estimate `beta` | `docs/positioning-probe.md` §5.1. `decay` is a fixed constructor argument on both `ModelHawkesExpKernLogLik` and `HawkesExpKern` |
+| `tick` silently returns a different wrong answer for unsorted input | OQ-7, `conventions.md` C8. Three orderings of the same three timestamps give three different losses, with no error |
+| `tick` has an undeclared runtime dependency without which every model class fails to construct | OQ-9 |
+
+### Why this entry stays rather than being deleted
+
+It is the record of a stated premise being tested and failing. `docs/positioning-probe.md`
+is the evidence, and the benchmarks are expected to keep reporting that `tick` is
+faster here.
 
 ---
 

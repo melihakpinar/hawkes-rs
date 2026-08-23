@@ -87,6 +87,8 @@ First public API. `hawk::univariate`:
 
 - No algorithm code. No intensity, likelihood, simulator or estimator exists.
 - OQ-8 (whether `tick`'s loss offset is parameter-independent) and OQ-7 (event
-  ordering and exact ties) are OPEN and must be closed before or during M1.
-- OQ-10 records that CLAUDE.md's premise — that `tick` is unmaintained and breaks on
-  Python 3.13+ — was not borne out, and needs a decision from the repository owner.
+  ordering and exact ties) were OPEN at the time of this milestone; both were closed
+  in M1.
+- OQ-10 recorded that CLAUDE.md's premise — that `tick` is unmaintained and breaks on
+  Python 3.13+ — was not borne out. Closed after the positioning probe measured it;
+  the preamble no longer makes that claim.
