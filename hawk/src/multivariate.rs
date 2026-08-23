@@ -152,11 +152,20 @@ impl Parameters {
     /// min_i (A x)_i / x_i  <=  rho(A)  <=  max_i (A x)_i / x_i
     /// ```
     ///
-    /// Power iteration tightens the bracket. It is run on `A + I` rather than `A`,
-    /// and 1 subtracted at the end: `rho(A + I) = rho(A) + 1` for non-negative `A`,
-    /// and shifting makes the matrix aperiodic. Without the shift a periodic matrix
-    /// such as `[[0, 2], [0.9, 0]]` oscillates forever between the bounds `0.9` and
-    /// `2` and never converges — that case is in the tests.
+    /// The **upper** bound is what is returned, not the bracket's midpoint. Collatz-
+    /// Wielandt gives `rho(A) = inf over positive x of max_i (A x)_i / x_i`, so the
+    /// upper bound converges to `rho` from above for any non-negative matrix,
+    /// including reducible ones. The lower bound converges only when `A` is
+    /// irreducible: for a diagonal matrix `(A x)_i / x_i = m_i` exactly, so the
+    /// bracket is `[min m_i, max m_i]` at every step and never closes. Returning the
+    /// midpoint gives `0.45` for `diag(0.2, 0.7, 0.4)`, whose spectral radius is
+    /// `0.7` — that case is in the tests.
+    ///
+    /// Power iteration is run on `A + I` rather than `A`, and 1 subtracted at the
+    /// end: `rho(A + I) = rho(A) + 1` for non-negative `A`, and shifting makes the
+    /// matrix aperiodic. Without the shift a periodic matrix such as
+    /// `[[0, 2], [0.9, 0]]` oscillates forever between the bounds `0.9` and `2` and
+    /// never converges — also in the tests.
     pub fn branching_ratio_spectral_radius(&self) -> f64 {
         let d = self.dimension();
         let shifted =
@@ -165,6 +174,7 @@ impl Parameters {
         let mut x = vec![1.0f64; d];
         let mut lower = 0.0f64;
         let mut upper = f64::INFINITY;
+        let mut previous_upper = f64::INFINITY;
 
         // Geometric convergence; the cap is a backstop, not the expected exit.
         for _ in 0..10_000 {
@@ -185,9 +195,14 @@ impl Parameters {
                 upper = upper.max(ratio);
             }
             // Both bounds are rigorous at every step, so stopping early is safe.
-            if upper - lower <= 1e-14 * upper.max(1.0) {
+            // Either the bracket closes (irreducible) or the upper bound stops
+            // moving (reducible, where the lower bound never catches up).
+            if upper - lower <= 1e-14 * upper.max(1.0)
+                || (previous_upper - upper).abs() <= 1e-15 * upper.max(1.0)
+            {
                 break;
             }
+            previous_upper = upper;
             let norm: f64 = y.iter().sum();
             if norm == 0.0 || !norm.is_finite() {
                 break;
@@ -196,8 +211,9 @@ impl Parameters {
                 *slot = value / norm * d as f64;
             }
         }
-        // Midpoint of the final bracket, shifted back.
-        (0.5 * (lower + upper) - 1.0).max(0.0)
+        let _ = lower;
+        // The upper bound, shifted back. See the note above on why not the midpoint.
+        (upper - 1.0).max(0.0)
     }
 
     /// Whether the process is stationary: branching-ratio spectral radius `< 1`.
@@ -634,4 +650,161 @@ pub fn negative_log_likelihood_and_gradient(
             decay,
         },
     )
+}
+
+/// The compensator `Lambda_i(t) = int_0^t lambda_i(u) du`, evaluated at each
+/// component's own event times.
+///
+/// `result[i][k]` is `Lambda_i` at component `i`'s `k`-th event.
+///
+/// ```text
+/// Lambda_i(t) = mu[i]*t + sum_j alpha[i][j] * sum_{t^j_l < t} ( 1 - exp(-beta*(t - t^j_l)) )
+/// ```
+///
+/// The inner sum telescopes to `m_j(t) - B^j(t)`, where `m_j(t)` counts the events of
+/// `j` strictly before `t`, so this runs in `O(n*d)` on the same pooled recursion the
+/// likelihood uses.
+///
+/// For Ogata residual analysis: by the random time change theorem
+/// [Laub2015, Theorem 4] applied per component, if the parameters are correct then
+/// each `{Lambda_i(t^i_k)}_k` is a unit-rate Poisson process, so the successive
+/// differences are i.i.d. `Exp(1)`. Note this must be checked **per component**: a
+/// pooled test would let an error in one component be masked by another.
+pub fn compensator_at_events(parameters: &Parameters, observation: &Observation) -> Vec<Vec<f64>> {
+    let d = parameters.dimension();
+    let beta = parameters.decay;
+    let events = observation.events();
+    let mut out: Vec<Vec<f64>> = events.iter().map(|c| Vec::with_capacity(c.len())).collect();
+    if observation.is_empty() {
+        return out;
+    }
+
+    let mut walk = PooledWalk::new(events);
+    let mut counts = vec![0usize; d];
+    let mut previous_counts = vec![0usize; d];
+    let mut state = vec![0.0f64; d];
+    let mut before = vec![0.0f64; d];
+    let mut previous_time = 0.0f64;
+    let mut started = false;
+
+    while let Some(time) = walk.next(&mut counts) {
+        if started {
+            let gap = time - previous_time;
+            for m in 0..d {
+                let (advanced, _) = crate::univariate::advance_excitation_state(
+                    state[m],
+                    previous_counts[m] as f64,
+                    gap,
+                    beta,
+                );
+                state[m] = advanced;
+                before[m] += previous_counts[m] as f64;
+            }
+        }
+        started = true;
+
+        for i in 0..d {
+            if counts[i] == 0 {
+                continue;
+            }
+            let mut value = parameters.baseline[i] * time;
+            for j in 0..d {
+                value += parameters.excitation[i * d + j] * (before[j] - state[j]);
+            }
+            for _ in 0..counts[i] {
+                out[i].push(value);
+            }
+        }
+
+        previous_time = time;
+        previous_counts.copy_from_slice(&counts);
+    }
+    out
+}
+
+/// Simulates a `d`-component realization on `[0, horizon]` by Ogata's modified
+/// thinning algorithm, [Laub2015, Algorithm 2] extended to `d` dimensions.
+///
+/// The bound is the **total** intensity `sum_i lambda_i(t+)`, taken from the exact
+/// right-hand limit rather than [Laub2015]'s `lambda*(t + epsilon)` nudge, for the
+/// reason given in [`crate::univariate::simulate`]. Between accepted events every
+/// component's excitation decays and `alpha` is non-negative, so the total is
+/// non-increasing and the bound holds until the next acceptance.
+///
+/// On acceptance the component is drawn with probability `lambda_i / sum_i lambda_i`,
+/// which is the standard superposition argument: the multivariate process is the
+/// superposition of `d` point processes, and conditional on a point occurring, it
+/// belongs to component `i` with that probability.
+///
+/// # Non-stationary parameters
+///
+/// No cap on the number of events. With `spectral_radius(alpha) >= 1`
+/// ([`Parameters::is_stationary`]) the process is explosive; check first.
+pub fn simulate(
+    parameters: &Parameters,
+    horizon: f64,
+    rng: &mut impl rand::Rng,
+) -> Result<Vec<Vec<f64>>, Error> {
+    if !horizon.is_finite() || horizon <= 0.0 {
+        return Err(Error::InvalidHorizon { horizon });
+    }
+    let d = parameters.dimension();
+    let beta = parameters.decay;
+
+    let mut events: Vec<Vec<f64>> = vec![Vec::new(); d];
+    let mut current = 0.0f64;
+    // sum_{t^m_k <= current} exp(-beta*(current - t^m_k)); the RIGHT limit, so
+    // `intensity_of` below gives lambda_i(current+).
+    let mut excitation = vec![0.0f64; d];
+    let mut intensity = vec![0.0f64; d];
+
+    loop {
+        let mut bound = 0.0;
+        for i in 0..d {
+            let mut value = parameters.baseline[i];
+            for j in 0..d {
+                value += (parameters.excitation[i * d + j] * beta) * excitation[j];
+            }
+            bound += value;
+        }
+
+        let uniform: f64 = rng.random::<f64>();
+        let waiting = -uniform.ln() / bound;
+        let candidate = current + waiting;
+        if candidate >= horizon {
+            return Ok(events);
+        }
+
+        // Decay to the candidate. Nothing has been accepted there yet, so this is the
+        // predictable intensity at `candidate`.
+        let gap_decay = (-beta * waiting).exp();
+        let mut total = 0.0;
+        for m in 0..d {
+            excitation[m] *= gap_decay;
+        }
+        for i in 0..d {
+            let mut value = parameters.baseline[i];
+            for j in 0..d {
+                value += (parameters.excitation[i * d + j] * beta) * excitation[j];
+            }
+            intensity[i] = value;
+            total += value;
+        }
+
+        current = candidate;
+        if rng.random::<f64>() * bound <= total {
+            // Superposition: choose the component proportionally to its intensity.
+            let mut target = rng.random::<f64>() * total;
+            let mut chosen = d - 1;
+            for i in 0..d {
+                target -= intensity[i];
+                if target <= 0.0 {
+                    chosen = i;
+                    break;
+                }
+            }
+            events[chosen].push(candidate);
+            excitation[chosen] += 1.0;
+        }
+    }
 }

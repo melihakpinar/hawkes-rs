@@ -707,6 +707,57 @@ version of this harness crashed there. It now uses the second-order one-sided fo
 first-order forward difference, whose `O(h)` error would be `1e-5` and would not fit
 inside the `1e-6` gate.
 
+## Harness 16 — the multivariate simulator (step 7) and stationarity
+
+`hawk/tests/multivariate_simulator.rs`. Both CLAUDE.md §3 external oracles, applied
+**per component**. A pooled mean-intensity test would let an error that moves activity
+between components cancel exactly: the total right, the process wrong. That is not
+hypothetical — a transposed excitation matrix does precisely that whenever the column
+sums are equal. `the_per_component_test_is_stronger_than_the_total` asserts the test
+parameters have genuinely different component rates, so the per-component assertion is
+a real constraint rather than a total in disguise.
+
+### A bug the tests found before any sabotage
+
+`branching_ratio_spectral_radius` originally returned the **midpoint** of the
+Collatz-Wielandt bracket. That is wrong for reducible matrices: for
+`diag(0.2, 0.7, 0.4)` the ratios `(A x)_i / x_i` equal `m_i` exactly at every step, so
+the bracket is `[0.2, 0.7]` forever and the midpoint gives `0.45` where the spectral
+radius is `0.7`.
+
+Collatz-Wielandt gives `rho(A) = inf over positive x of max_i (A x)_i / x_i`, so it is
+the **upper** bound that converges to `rho` for any non-negative matrix; the lower
+bound converges only when `A` is irreducible. The routine now returns the upper bound
+and stops when it stops moving, rather than waiting for a bracket that may never close.
+
+The diagonal case was in `spectral_radius_matches_hand_calculations` because a diagonal
+matrix has an obvious answer, not because the failure was anticipated.
+
+### S41 — remove the spectral-radius check from `stationary_mean_intensity`
+
+Constraint (b): invertibility of `I - alpha` does not establish stationarity.
+
+**RED on `non_stationary_parameters_have_no_mean_intensity` alone.** For
+`alpha = [[0, 2], [0.9, 0]]` the spectral radius is `1.3416` but
+`det(I - alpha) = -0.8`, so with the check removed the solve succeeds and returns a
+vector with negative entries. Nothing about the linear algebra failing would have
+signalled the problem: the answer looks like an answer.
+
+## Harness 17 — `tick` differential at varying `D` (step 12)
+
+`hawk/tests/differential_tick.rs`, now comparing every fixture at `d` in
+{1, 2, 3, 10}.
+
+### S39 — hardcode `D = 3` instead of the fixture's dimension
+
+**RED**, off by exactly `400` on a fixture with `D*T = 800` and `T = 400`. This is the
+sabotage the milestone asked for by name: with a single `D` in the corpus the test
+would have passed, and the offset would have been confirmed only coincidentally.
+
+### S40 — drop the `D*T` offset entirely
+
+**RED**, off by exactly `800` — the value of `D*T` for that fixture.
+
 ## Summary
 
 | ID | Harness | What was broken | Result |
@@ -750,6 +801,9 @@ inside the `1e-6` gate.
 | S36 | multivariate gradient | `beta*Bp` dropped from the pair accumulator | RED |
 | S37 | multivariate gradient | excitation index transposed in `d/dbeta` | RED |
 | S38 | multivariate gate | computation scale inflated 10x | RED on the meta-tests only |
+| S39 | `tick` differential | `D` hardcoded to 3 | RED, off by exactly `|D-3|*T` |
+| S40 | `tick` differential | `D*T` offset dropped | RED, off by exactly `D*T` |
+| S41 | stationarity | spectral-radius check removed | RED on the non-stationary case alone |
 
 Every harness has been observed both red and green. The working tree after all
 sabotages is byte-identical to before them.
