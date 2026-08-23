@@ -26,7 +26,7 @@ from tick.hawkes import ModelHawkesExpKernLogLik, SimuHawkesExpKernels
 
 import tick
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Scenarios span univariate and multivariate, small and large event counts, and
 # symmetric and asymmetric excitation. The asymmetric ones are load-bearing: a
@@ -230,7 +230,6 @@ def build(scenario):
         # Hand-built scenario. Nothing is simulated, so there is no seed; the
         # timestamps are the input and only tick's values are derived.
         events = [np.asarray(e, dtype=float) for e in scenario["events"]]
-        spectral_radius = float(np.max(np.abs(np.linalg.eigvals(adjacency))))
     else:
         simulator = SimuHawkesExpKernels(
             adjacency=adjacency,
@@ -242,7 +241,6 @@ def build(scenario):
         )
         simulator.simulate()
         events = [np.asarray(t, dtype=float) for t in simulator.timestamps]
-        spectral_radius = float(simulator.spectral_radius())
 
     model = ModelHawkesExpKernLogLik(decay=decay)
     # end_times is passed explicitly. Left as None, tick infers the window as
@@ -291,12 +289,28 @@ def build(scenario):
             "negative log-likelihood ratio w.r.t. unit-rate Poisson, "
             "divided by n_jumps; see docs/open-questions.md OQ-8"
         ),
+        # NOTE: the spectral radius is deliberately NOT stored.
+        #
+        # It is a property of `adjacency`, which is right here in the file, so storing
+        # it adds nothing a consumer cannot compute. What it did add was a
+        # reproducibility hazard: it came from `numpy.linalg.eigvals` (or tick's
+        # `spectral_radius()`, same route), and LAPACK through OpenBLAS selects kernels
+        # by runtime CPU feature detection. On a heterogeneous CI fleet the same 10x10
+        # eigenvalue solve takes different code paths on different machines and lands
+        # on different last bits.
+        #
+        # That made the d = 10 fixture pass and fail across runs of identical content:
+        # runs 32665557657 (pass), 32666418281 (fail), 32666780433 (fail),
+        # 32667239095 (pass). Nothing else in a fixture touches BLAS -- the events and
+        # tick's loss and gradient are C++ loops with n_threads = 1.
+        #
+        # The Rust side computes it with hawk's own routine instead, which is pure f64
+        # arithmetic and deterministic, and which `spectral_radius.rs` pins.
         "n_nodes": int(n_nodes),
         "decay": decay,
         "end_time": end_time,
         "baseline": [float(v) for v in baseline],
         "adjacency": [[float(v) for v in row] for row in adjacency],
-        "spectral_radius": spectral_radius,
         "has_ties": bool(any(len(set(e.tolist())) != e.size for e in events)),
         "n_jumps": int(sum(len(t) for t in events)),
         "events": [[float(v) for v in t] for t in events],

@@ -848,6 +848,38 @@ cap, against `1e-9` or better for everything else. That is immaterial for decidi
 `rho < 1`, which is what the value is for, and it is now in the doc comment and pinned
 by `DEFECTIVE_TOLERANCE` rather than hidden by omitting the cases.
 
+## An intermittent CI failure, and what it was
+
+`fixtures are reproducible` failed on the `d = 10` fixture while every other fixture
+matched and the event count was identical, so the simulation had reproduced and a
+*derived* field had not.
+
+The run history is what identified it. **The same content passed, failed, failed, then
+passed**: runs `32665557657`, `32666418281`, `32666780433`, `32667239095`. A content
+mismatch does not do that; a machine-dependent computation does.
+
+`spectral_radius` was the only field in a fixture that went through LAPACK — via
+`numpy.linalg.eigvals`, or tick's `spectral_radius()`, which is the same route. OpenBLAS
+selects kernels by runtime CPU feature detection, GitHub's runner fleet is
+heterogeneous, and a 10x10 eigenvalue solve takes different code paths on different
+microarchitectures. Everything else in a fixture is a C++ loop at `n_threads = 1`,
+which is why `d = 1`, `2` and `3` never showed it: their eigenvalue solves are short
+enough to land on the same bits either way.
+
+**Fix:** the field is gone (schema 3). It was a property of `adjacency`, which is in the
+file, so it added nothing a consumer could not compute — and what it did add was a
+reproducibility hazard that would have recurred for every future large-`d` fixture. The
+Rust side now computes it with `hawk`'s own routine, which is pure `f64` arithmetic,
+deterministic, and pinned by `spectral_radius.rs` including on the reducible matrices
+where the naive method is wrong.
+
+**Instrument kept.** `--check` previously printed `DIFFER <file>` and nothing else,
+which sends the reader to diff two 80 KB JSON files by hand for a difference in the last
+bits. It now walks both fixtures and names each differing leaf with both values at full
+`repr`. That was written and proven — by perturbing `spectral_radius` and one
+`tick_loss` locally and confirming both are named — *before* the cause was known, and it
+stays whether or not it is needed again.
+
 ## Summary
 
 | ID | Harness | What was broken | Result |

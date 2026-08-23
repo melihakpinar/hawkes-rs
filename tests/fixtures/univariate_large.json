@@ -3208,7 +3208,6 @@
   "n_jumps": 3100,
   "n_nodes": 1,
   "name": "univariate_large",
-  "schema_version": 2,
-  "spectral_radius": 0.5,
+  "schema_version": 3,
   "tick_loss_convention": "negative log-likelihood ratio w.r.t. unit-rate Poisson, divided by n_jumps; see docs/open-questions.md OQ-8"
 }
