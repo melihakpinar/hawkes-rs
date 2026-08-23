@@ -758,6 +758,49 @@ would have passed, and the offset would have been confirmed only coincidentally.
 
 **RED**, off by exactly `800` — the value of `D*T` for that fixture.
 
+## Harness 18 — the fit and the parameter space (step 13, constraint (a))
+
+`hawk/tests/multivariate_roundtrip.rs`. Recovery is compared **elementwise** on the
+excitation matrix, because every aggregate comparison is blind to a transposition:
+`transposition_is_caught_by_the_elementwise_comparison` shows that a transpose
+preserves the Frobenius norm exactly and the spectral radius exactly, so a norm-based
+or radius-based recovery test cannot see it.
+
+### S42 — treat the log coordinate for `excitation` as if it were natural
+
+Drops the `exp` in `fit`'s parameter reconstruction, i.e. the boundary conversion that
+`docs/derivations/parameter_space.md` is about.
+
+**RED on three of four tests.** The true-zero case reports the entry recovered as
+`26.96` against a genuinely non-zero entry of `1.42`, which is the shape of the error
+rather than just its size.
+
+## Harness 19 — parallel and sequential agree bitwise (step 14)
+
+`hawk/tests/multivariate_parallel.rs`, `--features rayon`.
+
+### S43 — combine the per-component parts in reverse index order
+
+Mathematically invisible; passes any tolerance.
+
+**RED on `agree_over_random_shapes`, by one ulp** —
+`-89.82569657461426` against `-89.82569657461427`. The two fixed-shape tests stayed
+**green**: the hand-chosen cases round the same either way, and only the randomized
+sweep found a shape where they do not. That is CLAUDE.md §3's fixed-seed rule again, in
+a different guise.
+
+### The measurement, recorded because it is negative
+
+`negative_log_likelihood_parallel` is correct and bitwise identical, and it is
+**228x to 397x slower** than the sequential path
+(`benchmarks/results/multivariate-parallel.json`). At one distinct time the parallel
+work is `O(d + d^2)` flops — 110 at `d = 10` — and thread dispatch costs far more.
+
+It is kept, off by default, because "component-level parallelism does not pay here, by
+two to three orders of magnitude" is more useful to the repository than an absence, and
+because the component-major accumulation it forced is what any future parallel path
+will need.
+
 ## Summary
 
 | ID | Harness | What was broken | Result |
@@ -804,6 +847,8 @@ would have passed, and the offset would have been confirmed only coincidentally.
 | S39 | `tick` differential | `D` hardcoded to 3 | RED, off by exactly `|D-3|*T` |
 | S40 | `tick` differential | `D*T` offset dropped | RED, off by exactly `D*T` |
 | S41 | stationarity | spectral-radius check removed | RED on the non-stationary case alone |
+| S42 | fit parameter space | log coordinate for `excitation` treated as natural | RED on 3 of 4 |
+| S43 | parallel path | per-component parts combined in reverse order | RED on the randomized case, by one ulp; fixed shapes stayed green |
 
 Every harness has been observed both red and green. The working tree after all
 sabotages is byte-identical to before them.

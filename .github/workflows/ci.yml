@@ -34,6 +34,11 @@ jobs:
       - name: cargo test
         run: cargo test --all-features
 
+      # The default feature set is what most callers build, and `rayon` changes which
+      # code paths compile. Both are run.
+      - name: cargo test (default features)
+        run: cargo test
+
   fixtures:
     name: fixtures are reproducible
     runs-on: ubuntu-latest

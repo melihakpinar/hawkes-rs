@@ -473,7 +473,11 @@ pub fn negative_log_likelihood(parameters: &Parameters, observation: &Observatio
     let mut counts = vec![0usize; d];
     let mut state = vec![0.0f64; d];
     let mut compensator = vec![0.0f64; d];
-    let mut log_term = 0.0f64;
+    // Accumulated per component and combined in index order at the end, so the
+    // summation order does not depend on how the per-component work is scheduled.
+    // That is what lets the parallel path be bitwise identical (step 14); it is not
+    // an optimisation.
+    let mut log_term_parts = vec![0.0f64; d];
     let mut previous_time = 0.0f64;
     let mut previous_counts = vec![0usize; d];
     let mut started = false;
@@ -510,7 +514,7 @@ pub fn negative_log_likelihood(parameters: &Parameters, observation: &Observatio
             }
             let logarithm = intensity.ln();
             for _ in 0..counts[i] {
-                log_term += logarithm;
+                log_term_parts[i] += logarithm;
             }
         }
 
@@ -522,6 +526,10 @@ pub fn negative_log_likelihood(parameters: &Parameters, observation: &Observatio
         for j in 0..d {
             total += parameters.excitation[i * d + j] * compensator[j];
         }
+    }
+    let mut log_term = 0.0f64;
+    for part in &log_term_parts {
+        log_term += part;
     }
     total - log_term
 }
@@ -565,7 +573,9 @@ pub fn negative_log_likelihood_and_gradient(
     let mut state_derivative = vec![0.0f64; d];
     let mut compensator = vec![0.0f64; d];
     let mut decay_compensator = vec![0.0f64; d];
-    let mut log_term = 0.0f64;
+    // Per component, combined in index order at the end. See the note in
+    // `negative_log_likelihood`.
+    let mut log_term_parts = vec![0.0f64; d];
     let mut baseline_accumulator = vec![0.0f64; d];
     let mut excitation_accumulator = vec![0.0f64; d * d];
     let mut pair_accumulator = vec![0.0f64; d * d]; // S[i][j], (MG.7)
@@ -610,7 +620,7 @@ pub fn negative_log_likelihood_and_gradient(
             }
             let logarithm = intensity.ln();
             for _ in 0..counts[i] {
-                log_term += logarithm;
+                log_term_parts[i] += logarithm;
                 baseline_accumulator[i] += 1.0 / intensity;
                 for j in 0..d {
                     excitation_accumulator[i * d + j] += (beta * state[j]) / intensity;
@@ -628,6 +638,10 @@ pub fn negative_log_likelihood_and_gradient(
         for j in 0..d {
             total += parameters.excitation[i * d + j] * compensator[j];
         }
+    }
+    let mut log_term = 0.0f64;
+    for part in &log_term_parts {
+        log_term += part;
     }
     let negative_log_likelihood = total - log_term;
 
@@ -807,4 +821,340 @@ pub fn simulate(
             excitation[chosen] += 1.0;
         }
     }
+}
+
+/// Outcome of a multivariate maximum-likelihood fit.
+#[derive(Debug, Clone)]
+pub struct Fit {
+    pub parameters: Parameters,
+    pub negative_log_likelihood: f64,
+    pub iterations: u64,
+    /// Whether the result is at a stationary point of the objective, **measured** at
+    /// the result rather than claimed by the optimizer. See
+    /// [`crate::univariate::Fit::converged`] for why those differ.
+    pub converged: bool,
+    /// Infinity norm of the per-event log-space gradient at the result.
+    pub gradient_norm: f64,
+    pub objective_evaluations: u64,
+    pub gradient_evaluations: u64,
+}
+
+impl Fit {
+    /// Spectral radius of the fitted excitation matrix, reported as a **diagnostic**.
+    ///
+    /// Stationarity is not enforced during optimization (CLAUDE.md §6). A fitted
+    /// radius at or above 1 is a real finding about the data, not an error.
+    pub fn branching_ratio_spectral_radius(&self) -> f64 {
+        self.parameters.branching_ratio_spectral_radius()
+    }
+
+    pub fn is_stationary(&self) -> bool {
+        self.parameters.is_stationary()
+    }
+}
+
+/// Maximum-likelihood fit by L-BFGS in log-parameter space.
+///
+/// # Parametrization
+///
+/// Optimizes `(ln mu, ln alpha, ln beta)`, `alpha` included. The reasoning, and what
+/// is given up by making exact zeros unreachable, is in
+/// `docs/derivations/parameter_space.md`. `Parameters::new` still accepts
+/// `alpha[i][j] = 0`; only `fit` is constrained in where it can land.
+///
+/// # Scaling
+///
+/// The objective is divided by the total event count, as in the univariate fit. The
+/// unnormalized log-space gradient grows with `n`, and a line search whose first trial
+/// step is 1 then leaps far enough that `exp` overflows — the failure recorded in
+/// `docs/positioning-probe.md` part 3.
+pub fn fit(observation: &Observation) -> Result<Fit, Error> {
+    let d = observation.dimension();
+    let total_events = observation.len();
+    // `d + d*d + 1` parameters. The bound is deliberately weak: it rejects the cases
+    // with no interior optimum and leaves "few events give a poor fit" to the caller.
+    if total_events < d + d * d + 1 {
+        return Err(Error::insufficient_data(total_events));
+    }
+
+    // Starting point. Each component's observed rate is split evenly between its own
+    // baseline and the excitation it receives, so the initial guess already reproduces
+    // the per-component first moment: with a uniform `alpha` of `0.5/d` per entry the
+    // row sums are 0.5, and `mu/(1 - 0.5)` recovers the rate.
+    let horizon = observation.horizon();
+    let mut start = Vec::with_capacity(d + d * d + 1);
+    for component in observation.events() {
+        let rate = (component.len() as f64 / horizon).max(f64::MIN_POSITIVE);
+        start.push((0.5 * rate).ln());
+    }
+    for _ in 0..d * d {
+        start.push((0.5 / d as f64).ln());
+    }
+    let mean_interarrival = horizon / total_events as f64;
+    start.push((1.0 / mean_interarrival).ln());
+
+    fit_from(observation, start)
+}
+
+/// Fits from a caller-supplied starting point in **log** coordinates.
+///
+/// Exposed so multi-start invariance can be tested: a fit that lands somewhere
+/// different depending on where it began is reporting a local optimum, and the round
+/// trip would be measuring the starting point rather than the data.
+pub fn fit_from(observation: &Observation, start: Vec<f64>) -> Result<Fit, Error> {
+    use argmin::core::{CostFunction, Executor, Gradient as ArgminGradient, State};
+    use argmin::solver::linesearch::MoreThuenteLineSearch;
+    use argmin::solver::quasinewton::LBFGS;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    let d = observation.dimension();
+    let total_events = observation.len();
+    if total_events < d + d * d + 1 {
+        return Err(Error::insufficient_data(total_events));
+    }
+    if start.len() != d + d * d + 1 {
+        return Err(Error::DimensionMismatch {
+            what: "start",
+            actual: start.len(),
+            expected: d + d * d + 1,
+            dimension: d,
+        });
+    }
+
+    struct Problem<'a, 'b> {
+        observation: &'a Observation<'b>,
+        dimension: usize,
+        scale: f64,
+        objective_calls: Arc<AtomicU64>,
+        gradient_calls: Arc<AtomicU64>,
+    }
+
+    impl Problem<'_, '_> {
+        fn parameters(&self, log_parameters: &[f64]) -> Parameters {
+            let d = self.dimension;
+            let baseline: Vec<f64> = log_parameters[..d].iter().map(|v| v.exp()).collect();
+            let excitation: Vec<f64> = log_parameters[d..d + d * d]
+                .iter()
+                .map(|v| v.exp())
+                .collect();
+            let decay = log_parameters[d + d * d].exp();
+            Parameters::new(baseline, excitation, decay).unwrap_or_else(|_| Parameters {
+                baseline: vec![f64::MIN_POSITIVE; d],
+                excitation: vec![f64::MIN_POSITIVE; d * d],
+                decay: f64::MIN_POSITIVE,
+            })
+        }
+    }
+
+    impl CostFunction for Problem<'_, '_> {
+        type Param = Vec<f64>;
+        type Output = f64;
+        fn cost(&self, log_parameters: &Self::Param) -> Result<f64, argmin::core::Error> {
+            self.objective_calls.fetch_add(1, Ordering::Relaxed);
+            Ok(
+                negative_log_likelihood(&self.parameters(log_parameters), self.observation)
+                    / self.scale,
+            )
+        }
+    }
+
+    impl ArgminGradient for Problem<'_, '_> {
+        type Param = Vec<f64>;
+        type Gradient = Vec<f64>;
+        fn gradient(&self, log_parameters: &Self::Param) -> Result<Vec<f64>, argmin::core::Error> {
+            self.gradient_calls.fetch_add(1, Ordering::Relaxed);
+            let parameters = self.parameters(log_parameters);
+            let (_, gradient) = negative_log_likelihood_and_gradient(&parameters, self.observation);
+            let log_gradient = gradient.to_log_parameter_space(&parameters);
+            let mut flat = log_gradient.baseline;
+            flat.extend_from_slice(&log_gradient.excitation);
+            flat.push(log_gradient.decay);
+            for slot in &mut flat {
+                *slot /= self.scale;
+            }
+            Ok(flat)
+        }
+    }
+
+    let objective_calls = Arc::new(AtomicU64::new(0));
+    let gradient_calls = Arc::new(AtomicU64::new(0));
+    let problem = Problem {
+        observation,
+        dimension: d,
+        scale: total_events as f64,
+        objective_calls: Arc::clone(&objective_calls),
+        gradient_calls: Arc::clone(&gradient_calls),
+    };
+
+    let line_search = MoreThuenteLineSearch::new()
+        .with_c(1e-4, 0.9)
+        .map_err(|e| Error::OptimizerFailed {
+            message: e.to_string(),
+        })?;
+    let solver = LBFGS::new(line_search, 10)
+        .with_tolerance_grad(1e-10)
+        .map_err(|e| Error::OptimizerFailed {
+            message: e.to_string(),
+        })?;
+
+    let result = Executor::new(problem, solver)
+        .configure(|state| state.param(start).max_iters(1000))
+        .run()
+        .map_err(|e| Error::OptimizerFailed {
+            message: e.to_string(),
+        })?;
+
+    let state = result.state();
+    let best = state
+        .get_best_param()
+        .ok_or_else(|| Error::OptimizerFailed {
+            message: "optimizer returned no parameters".to_owned(),
+        })?;
+    let baseline: Vec<f64> = best[..d].iter().map(|v| v.exp()).collect();
+    let excitation: Vec<f64> = best[d..d + d * d].iter().map(|v| v.exp()).collect();
+    let parameters = Parameters::new(baseline, excitation, best[d + d * d].exp())?;
+
+    let value = negative_log_likelihood(&parameters, observation);
+    let (_, gradient) = negative_log_likelihood_and_gradient(&parameters, observation);
+    let log_gradient = gradient.to_log_parameter_space(&parameters);
+    let events = total_events as f64;
+    let gradient_norm = log_gradient
+        .baseline
+        .iter()
+        .chain(&log_gradient.excitation)
+        .chain(std::iter::once(&log_gradient.decay))
+        .map(|g| (g / events).abs())
+        .fold(0.0f64, f64::max);
+
+    Ok(Fit {
+        parameters,
+        negative_log_likelihood: value,
+        iterations: state.get_iter(),
+        converged: gradient_norm < 1e-6,
+        gradient_norm,
+        objective_evaluations: objective_calls.load(Ordering::Relaxed),
+        gradient_evaluations: gradient_calls.load(Ordering::Relaxed),
+    })
+}
+
+/// Negative log-likelihood with the per-component work spread across threads.
+///
+/// **Bitwise identical to [`negative_log_likelihood`].** That is not a happy accident:
+/// the log term is accumulated into one slot per component and combined in index
+/// order, so the arithmetic is fixed regardless of how the components are scheduled.
+/// `multivariate_parallel.rs` asserts it on every shape the sequential tests cover.
+///
+/// # What is and is not parallel
+///
+/// The recursion over time is inherently sequential — `B^m_r` depends on `B^m_{r-1}`
+/// — so only the work *within* one distinct time is spread: advancing the `d` states
+/// across the gap, and evaluating the `d` intensities. Both are independent per
+/// component and neither is a reduction.
+///
+/// # It is much slower. Measured, not assumed.
+///
+/// At one distinct time the parallel work is `O(d + d^2)` floating-point operations —
+/// 110 at `d = 10` — and a thread-pool dispatch costs far more than that. Median of 5,
+/// Apple M2, `benchmarks/results/multivariate-parallel.json`:
+///
+/// | `d` | events | sequential | parallel | ratio |
+/// | --- | --- | --- | --- | --- |
+/// | 2 | 65 226 | 0.002844 s | 0.824304 s | 290x slower |
+/// | 5 | 73 521 | 0.003419 s | 1.358337 s | 397x slower |
+/// | 10 | 89 286 | 0.005522 s | 1.825924 s | 331x slower |
+/// | 20 | 119 566 | 0.013534 s | 3.089594 s | 228x slower |
+///
+/// So this exists, is correct, is bitwise identical to the sequential path, and
+/// should not be switched on. It is kept because "component-level parallelism does not
+/// pay here, by two to three orders of magnitude" is a more useful thing for the
+/// repository to know than an absence, and because the bit-identity machinery it
+/// forced — component-major accumulation — is what any future parallel path will need.
+///
+/// Parallelising across time is not available: the state recursion forbids it.
+/// Parallelising across independent *realizations* would work and is the shape that
+/// would actually pay, but `hawk` has no multi-realization API and CLAUDE.md §5
+/// forbids building one ahead of a caller.
+#[cfg(feature = "rayon")]
+pub fn negative_log_likelihood_parallel(parameters: &Parameters, observation: &Observation) -> f64 {
+    use rayon::prelude::*;
+
+    let d = parameters.dimension();
+    let beta = parameters.decay;
+    let horizon = observation.horizon();
+
+    let mut total: f64 = 0.0;
+    for i in 0..d {
+        total += parameters.baseline[i] * horizon;
+    }
+    if observation.is_empty() {
+        return total;
+    }
+
+    let mut walk = PooledWalk::new(observation.events());
+    let mut counts = vec![0usize; d];
+    let mut state = vec![0.0f64; d];
+    let mut compensator = vec![0.0f64; d];
+    let mut log_term_parts = vec![0.0f64; d];
+    let mut previous_time = 0.0f64;
+    let mut previous_counts = vec![0usize; d];
+    let mut started = false;
+
+    while let Some(time) = walk.next(&mut counts) {
+        if started {
+            let gap = time - previous_time;
+            state
+                .par_iter_mut()
+                .zip(previous_counts.par_iter())
+                .for_each(|(slot, &count)| {
+                    let (advanced, _) =
+                        crate::univariate::advance_excitation_state(*slot, count as f64, gap, beta);
+                    *slot = advanced;
+                });
+        }
+        started = true;
+
+        let contribution = crate::univariate::compensator_contribution(beta, horizon - time);
+        for j in 0..d {
+            for _ in 0..counts[j] {
+                compensator[j] += contribution;
+            }
+        }
+
+        let baseline = &parameters.baseline;
+        let excitation = &parameters.excitation;
+        let state_view = &state;
+        let counts_view = &counts;
+        log_term_parts
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, part)| {
+                let count = counts_view[i];
+                if count == 0 {
+                    return;
+                }
+                let mut intensity = baseline[i];
+                for j in 0..d {
+                    intensity += (excitation[i * d + j] * beta) * state_view[j];
+                }
+                let logarithm = intensity.ln();
+                for _ in 0..count {
+                    *part += logarithm;
+                }
+            });
+
+        previous_time = time;
+        previous_counts.copy_from_slice(&counts);
+    }
+
+    for i in 0..d {
+        for j in 0..d {
+            total += parameters.excitation[i * d + j] * compensator[j];
+        }
+    }
+    let mut log_term = 0.0f64;
+    for part in &log_term_parts {
+        log_term += part;
+    }
+    total - log_term
 }

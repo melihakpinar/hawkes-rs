@@ -3,12 +3,11 @@
 Multivariate Hawkes processes in Rust: simulation and maximum-likelihood estimation,
 with Python bindings.
 
-> ## Pre-alpha — univariate only
+> ## Pre-alpha
 >
-> The univariate exponential-kernel process works: simulation, log-likelihood,
-> analytic gradient and maximum-likelihood fitting. **Multivariate is not implemented
-> yet**, there are no Python bindings yet, and the API will change. Do not depend on
-> this crate.
+> The exponential-kernel process works in one and `d` dimensions: simulation,
+> log-likelihood, analytic gradient and maximum-likelihood fitting. **There are no
+> Python bindings yet** and the API will change. Do not depend on this crate.
 >
 > Every formula traces to an approved derivation, and every oracle has been shown to
 > go red on deliberately broken code — see
@@ -30,7 +29,9 @@ written. The rules are in [`CLAUDE.md`](CLAUDE.md).
 | --- | --- | --- |
 | M0 | Verification infrastructure: pinned `tick` oracle, reference fixtures, differential / property / gradient harnesses, sabotage evidence | complete |
 | M1 | Univariate exponential-kernel likelihood, gradient, simulator, MLE | complete |
-| M2 | Multivariate, Python wheels, benchmarks against `tick` | not started |
+| M2 | Multivariate with cross-excitation | complete |
+| M3 | Python wheels | not started |
+| M4 | Benchmarks against `tick` | partial — see `docs/positioning-probe.md` |
 
 v0.1.0 is univariate and multivariate exponential-kernel Hawkes: simulation, MLE,
 Python wheels, benchmarks. Sum-of-exponentials and power-law kernels, non-parametric

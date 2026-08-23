@@ -407,3 +407,129 @@ impl Lcg {
         (self.next_f64() * bound as f64) as usize % bound.max(1)
     }
 }
+
+/// Asymptotic standard errors for the multivariate MLE, from the observed Fisher
+/// information, in the flat layout `[baseline (d), excitation (d*d), decay]`.
+///
+/// Same construction and same reasoning as [`asymptotic_standard_errors`]: the
+/// Hessian of the negative log-likelihood at the optimum, obtained by central-
+/// differencing the analytic gradient, inverted. Derived from theory rather than from
+/// this estimator's own scatter, which would be circular.
+///
+/// Returns `None` if the information matrix is singular or any variance is not
+/// positive — which happens when a component has too few events to identify its own
+/// row of `alpha`.
+pub fn multivariate_asymptotic_standard_errors(
+    parameters: &MultiParameters,
+    observation: &MultiObservation,
+) -> Option<Vec<f64>> {
+    let d = parameters.dimension();
+    let n = d + d * d + 1;
+    let mut centre = parameters.baseline().to_vec();
+    centre.extend_from_slice(parameters.excitation());
+    centre.push(parameters.decay());
+
+    let gradient_at = |point: &[f64]| -> Vec<f64> {
+        let p = MultiParameters::new(
+            point[..d].to_vec(),
+            point[d..d + d * d].to_vec(),
+            point[d + d * d],
+        )
+        .expect("valid parameters");
+        let (_, g) = hawk::multivariate::negative_log_likelihood_and_gradient(&p, observation);
+        let mut flat = g.baseline;
+        flat.extend_from_slice(&g.excitation);
+        flat.push(g.decay);
+        flat
+    };
+
+    let mut hessian = vec![0.0f64; n * n];
+    for column in 0..n {
+        // Clamped to half the coordinate, so a near-zero entry -- which is exactly
+        // what a recovered true zero looks like -- is not perturbed below its own
+        // domain. Without the clamp the step for a fitted `alpha` of 1e-9 would be
+        // 1e-8 and the backward point negative.
+        let step = (1e-5 * centre[column].abs().max(1e-3)).min(0.5 * centre[column].abs());
+        if step <= 0.0 || !step.is_finite() {
+            return None;
+        }
+        let mut up = centre.clone();
+        let mut down = centre.clone();
+        up[column] += step;
+        down[column] -= step;
+        if down[column] <= 0.0 {
+            return None;
+        }
+        let g_up = gradient_at(&up);
+        let g_down = gradient_at(&down);
+        for row in 0..n {
+            hessian[row * n + column] = (g_up[row] - g_down[row]) / (2.0 * step);
+        }
+    }
+    for row in 0..n {
+        for column in (row + 1)..n {
+            let mean = 0.5 * (hessian[row * n + column] + hessian[column * n + row]);
+            hessian[row * n + column] = mean;
+            hessian[column * n + row] = mean;
+        }
+    }
+
+    let inverse = invert(&hessian, n)?;
+    let mut errors = Vec::with_capacity(n);
+    for i in 0..n {
+        let variance = inverse[i * n + i];
+        if !variance.is_finite() || variance <= 0.0 {
+            return None;
+        }
+        errors.push(variance.sqrt());
+    }
+    Some(errors)
+}
+
+/// Gauss-Jordan inverse with partial pivoting, row-major `n x n`.
+fn invert(matrix: &[f64], n: usize) -> Option<Vec<f64>> {
+    let mut augmented = vec![0.0f64; n * 2 * n];
+    for row in 0..n {
+        for column in 0..n {
+            augmented[row * 2 * n + column] = matrix[row * n + column];
+        }
+        augmented[row * 2 * n + n + row] = 1.0;
+    }
+    for column in 0..n {
+        let pivot_row = (column..n).max_by(|&a, &b| {
+            augmented[a * 2 * n + column]
+                .abs()
+                .partial_cmp(&augmented[b * 2 * n + column].abs())
+                .unwrap()
+        })?;
+        if augmented[pivot_row * 2 * n + column].abs() < 1e-300 {
+            return None;
+        }
+        for k in 0..2 * n {
+            augmented.swap(column * 2 * n + k, pivot_row * 2 * n + k);
+        }
+        let pivot = augmented[column * 2 * n + column];
+        for k in 0..2 * n {
+            augmented[column * 2 * n + k] /= pivot;
+        }
+        for row in 0..n {
+            if row == column {
+                continue;
+            }
+            let factor = augmented[row * 2 * n + column];
+            if factor == 0.0 {
+                continue;
+            }
+            for k in 0..2 * n {
+                augmented[row * 2 * n + k] -= factor * augmented[column * 2 * n + k];
+            }
+        }
+    }
+    let mut inverse = vec![0.0f64; n * n];
+    for row in 0..n {
+        for column in 0..n {
+            inverse[row * n + column] = augmented[row * 2 * n + n + column];
+        }
+    }
+    Some(inverse)
+}

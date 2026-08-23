@@ -23,6 +23,36 @@ First public API. `hawk::univariate`:
 - `Fit::objective_evaluations` and `Fit::gradient_evaluations` — evaluation counts for
   a fit, counting line-search trials rather than iterations.
 
+### Added — M2, multivariate
+
+`hawk::multivariate`, `d` components with cross-excitation and a shared decay:
+
+- `Parameters` — baseline vector and row-major excitation matrix, `alpha[i][j]` meaning
+  "j excites i". `branching_ratio_spectral_radius`, `is_stationary`,
+  `stationary_mean_intensity` = `(I - alpha)^-1 mu` [Bacry2015, Prop. 4 eq. 21].
+- `Observation`, `negative_log_likelihood`, `negative_log_likelihood_and_gradient`,
+  `compensator_at_events`, `simulate`, `fit`, `fit_from`.
+- `negative_log_likelihood_parallel` behind the off-by-default `rayon` feature.
+
+At `d = 1` the multivariate path is **bitwise identical** to `univariate`, for both
+value and gradient.
+
+### Notes on M2
+
+- The recursion groups distinct times **pooled across all components**. Advancing per
+  event lets whichever component a merge visits first excite the others at a shared
+  timestamp; on a four-event example that is a 1.1% error, and it is invisible on any
+  simulated data.
+- `fit` optimizes `alpha` in log space, so a fitted entry is never exactly zero. The
+  reasoning and what it costs are in `docs/derivations/parameter_space.md`.
+- `stationary_mean_intensity` checks the spectral radius rather than inferring
+  stationarity from the linear solve succeeding; `I - alpha` can be invertible with
+  spectral radius above 1, and the solve then returns a vector with negative entries.
+- The `rayon` path is bitwise identical to the sequential one and **228x to 397x
+  slower** (`benchmarks/results/multivariate-parallel.json`). It is off by default.
+- A `d = 10` fixture was added, giving the corpus a second value of `D` so the `D*T`
+  offset in the OQ-8 identity is pinned rather than coincidental.
+
 ### Changed
 
 - `negative_log_likelihood` computes the value in one pass without computing the

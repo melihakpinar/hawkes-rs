@@ -1,0 +1,12 @@
+{
+  "what": "hawk multivariate negative_log_likelihood, rayon across components vs sequential",
+  "machine": "Apple M2, 8 cores, macOS",
+  "build": "cargo run --release --features rayon --example parallel_probe",
+  "protocol": "median of 5 after 1 warmup, wall clock, seconds",
+  "runs": [
+    {"d": 2,  "events": 65226,  "sequential": 0.002844, "parallel": 0.824304, "parallel_over_sequential": 289.81},
+    {"d": 5,  "events": 73521,  "sequential": 0.003419, "parallel": 1.358337, "parallel_over_sequential": 397.25},
+    {"d": 10, "events": 89286,  "sequential": 0.005522, "parallel": 1.825924, "parallel_over_sequential": 330.63},
+    {"d": 20, "events": 119566, "sequential": 0.013534, "parallel": 3.089594, "parallel_over_sequential": 228.28}
+  ]
+}
