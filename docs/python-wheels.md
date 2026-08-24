@@ -39,7 +39,7 @@ The import location is asserted by the test run, not eyeballed: if anything reso
 | Linux | `ubuntu-latest` | `x86_64` (manylinux) | yes |
 | Linux | `ubuntu-24.04-arm` | `aarch64` (manylinux) | yes |
 | macOS | `macos-14` | `arm64` | yes |
-| macOS | `macos-14` | `x86_64` (cross-built) | **no** |
+| macOS | `macos-14` | `x86_64` (cross-built, macOS 10.12+) | **no** |
 | Windows | `windows-latest` | `AMD64` | yes |
 
 and then installs the Linux `x86_64` wheel into CPython 3.9, 3.10, 3.11, 3.12 and 3.13,
@@ -47,6 +47,11 @@ each in an environment with no Rust toolchain and with the sources removed, and 
 `pytest` against it.
 
 ### macOS `x86_64` is built but not executed
+
+Its floor is macOS 10.12 rather than the 10.9 the cp39 tag defaults to, because
+that is Rust's minimum for `x86_64-apple-darwin`. `delocate` refuses to ship the
+mismatch, which is the right call — a 10.9 tag would promise an OS the binary
+cannot load on — so the tag states the real floor.
 
 It is cross-built on the arm64 runner and its test step is skipped, so it is a real
 artifact that has never been loaded by an interpreter.
