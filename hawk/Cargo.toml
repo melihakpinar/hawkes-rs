@@ -30,3 +30,12 @@ serde_json.workspace = true
 [[example]]
 name = "parallel_probe"
 required-features = ["rayon"]
+
+# The fixture-nll dumper needs serde to read the fixtures, which is a dev-dependency,
+# so the example is marked as requiring the dev profile's deps.
+[[example]]
+name = "dump_fixture_nll"
+
+
+
+

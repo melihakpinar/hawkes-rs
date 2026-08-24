@@ -9,5 +9,17 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[lib]
+# The compiled extension. `maturin` adds `pyo3/extension-module` at build time
+# (see pyproject.toml); it is deliberately NOT a feature of this crate, because
+# enabling it would break `cargo test` and `cargo clippy --all-features` by removing
+# the libpython symbols the test harness needs to link.
+name = "_hawk"
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 hawk = { path = "../hawk" }
+numpy = "0.29.0"
+pyo3 = { version = "0.29.2", features = ["abi3-py39"] }
+rand_chacha.workspace = true
+rand.workspace = true

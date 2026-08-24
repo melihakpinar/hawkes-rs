@@ -880,6 +880,69 @@ bits. It now walks both fixtures and names each differing leaf with both values 
 `tick_loss` locally and confirming both are named — *before* the cause was known, and it
 stays whether or not it is needed again.
 
+---
+
+# M3: the Python boundary
+
+## Harness 21 — bitwise equality across the boundary (step 3)
+
+`hawk-python/tests/test_bit_identity.py`. The Python bindings must return **bit for
+bit** what Rust computes, compared against `tests/fixtures/rust-nll.json`, which
+`hawk/tests/rust_nll_manifest.rs` fails on if it goes stale.
+
+### What it found, on the first run
+
+**Thirteen of forty-four points disagreed by one to two ulps** — and the cause was not
+in the bindings.
+
+Ruling that out took three measurements rather than a guess:
+
+1. Optimization level. Rebuilding the extension with `--release` changed nothing, and
+   the Rust example (opt-level 0) already agreed with the Rust test (opt-level 2).
+2. A minimal reproduction. Hand-built `d = 2` cases with three to five events matched
+   bitwise, so the code path was not at fault. The disagreement was size-dependent.
+3. The inputs. Dumping every element's bit pattern from both sides and diffing showed
+   the *events themselves* differing:
+   `e0_6` was `0x4029fc0f1abad071` in Rust and `0x4029fc0f1abad070` in Python.
+
+The fixture literal is `12.992302737526387`. Comparing both candidate doubles against
+the exact decimal: Python's is `9.08e-17` away, Rust's `1.87e-15`. **`serde_json`'s
+default float parsing is not correctly rounded**, and CPython's is.
+
+So every Rust test that reads the corpus had been computing on events up to one ulp
+away from the ones `tick` actually simulated. `serde_json`'s `float_roundtrip` feature
+fixes it, and with it enabled all 44 points agree bitwise.
+
+### Why nothing caught it for three milestones
+
+The `tick` differential compares to `1e-9` relative — seven orders of magnitude above
+one ulp. Every other fixture consumer is looser still. Nothing in the repository
+compared a fixture-derived value to anything at full precision until M3 required two
+independent readers of the same file to agree exactly.
+
+That is the argument for step 3 being bitwise rather than tolerant, made by the thing
+itself: a tolerance-based parity test would have passed on the first run and the corpus
+would still be being misread.
+
+`hawk/tests/fixture_parsing.rs` pins it, with the three literals and their correctly
+rounded doubles.
+
+### S46 — remove `float_roundtrip`
+
+**RED** on `fixture_parsing.rs`, naming the literal and both bit patterns.
+
+### The f32 round trip, made permanent rather than performed once
+
+Step 3 asks for an `f32` round trip to be inserted and the test confirmed red.
+`test_a_float32_round_trip_would_be_caught` asserts it on every run instead, and the
+condition is data-driven: a round trip only degrades a timestamp that is not exactly
+representable in `float32`, and the four hand-built tied fixtures use values like `1.0`
+and `2.5` that survive it. For those, nothing changing is correct; for every fixture
+whose timestamps *do* change, the likelihood must change too.
+
+A fixed count would have been wrong twice over — the first draft asserted 30 of 44 and
+28 changed.
+
 ## Summary
 
 | ID | Harness | What was broken | Result |
@@ -930,6 +993,7 @@ stays whether or not it is needed again.
 | S43 | parallel path | per-component parts combined in reverse order | RED on the randomized case, by one ulp; fixed shapes stayed green |
 | S44 | spectral radius | bracket midpoint instead of the upper bound | RED on the reducible cases, GREEN on irreducible |
 | S45 | spectral radius | "upper bound stopped moving" early exit restored | RED on the defective cases alone |
+| S46 | fixture parsing | `serde_json`'s `float_roundtrip` feature removed | RED, naming the literal and both bit patterns |
 
 Every harness has been observed both red and green. The working tree after all
 sabotages is byte-identical to before them.
