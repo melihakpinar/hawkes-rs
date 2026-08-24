@@ -46,6 +46,26 @@ and then installs the Linux `x86_64` wheel into CPython 3.9, 3.10, 3.11, 3.12 an
 each in an environment with no Rust toolchain and with the sources removed, and runs
 `pytest` against it.
 
+All five build legs and all five interpreters are green as of run
+[32772566244](https://github.com/melihakpinar/hawk/actions/runs/32772566244): **38
+tests passed on each interpreter**, with `hawk` asserted to resolve from
+`site-packages`. One `cp39-abi3` build served 3.9 through 3.13 — the span the abi3
+claim rests on, now measured rather than inferred from the wheel tag.
+
+### What the clean-install job caught
+
+It found two things on the first run that ever reached it, both of which mean the
+job had not been testing what it said:
+
+- **`ubuntu-latest` ships a preinstalled Rust toolchain.** The job's own guard —
+  "fail if `cargo` is on `PATH`" — is what reported it. The toolchain is now removed
+  before the guard runs, rather than the guard being relaxed to accommodate it. Without
+  that, "installs with no Rust toolchain" would have been an untested sentence.
+- **`--no-index` also cut off `numpy`.** The flag is meant to scope where
+  `hawk-hawkes` may come from, since it is published nowhere and a typo in the wheel
+  name should not be satisfiable from PyPI. It is not meant to block a declared runtime
+  dependency, which a real user does fetch from an index.
+
 ### macOS `x86_64` is built but not executed
 
 Its floor is macOS 10.12 rather than the 10.9 the cp39 tag defaults to, because

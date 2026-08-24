@@ -1091,3 +1091,34 @@ Two of CLAUDE.md §3's five oracles do not exist yet and are not claimed here:
 2. **Time-rescaling / Ogata residuals** — needs a simulator and a compensator. M1.
 
 The three that do exist are the three that can be built without algorithm code.
+
+## The wheel workflow, and three things it caught by failing
+
+M3 steps 8–10. Recorded because in each case the workflow was *green-adjacent* —
+either passing on a technicality or not running at all — and the failure is what
+turned an assumption into a measurement.
+
+**A retired runner is indistinguishable from a slow one.** The `macos-13` leg sat
+queued 15h49m without starting, while every other leg started within 6 seconds. Nothing
+failed; the workflow simply never finished, and because `clean-install` declares
+`needs: [build]`, steps 9 and 10 had **never executed** while the PR looked merely slow.
+The lesson generalises past CI: a verification that is pending forever reports the same
+thing as one that was never written, and neither shows up as red.
+
+**The clean-install guard caught its own environment.** `ubuntu-latest` ships a
+preinstalled Rust toolchain, so the job asserting "the wheel needs no Rust toolchain"
+was running in an environment that had one. The guard (`fail if cargo is on PATH`) is
+the only reason this is known. Had the job been written without it — installing the
+wheel and running pytest, which would have passed — the claim would have been false and
+green. This is the §3 sabotage principle arriving from the other direction: the guard
+went red on its first real run, which is exactly the evidence that it is an oracle.
+
+**A cross-built wheel is not a tested wheel.** macOS `x86_64` is now cross-built on the
+arm64 runner and never loaded by an interpreter. `docs/python-wheels.md` carries a
+column stating which platforms were imported on the runner and which were not, because
+the table would otherwise imply five tested platforms when four is the honest number.
+
+`delocate` refused the first cross-built wheel: Rust's `x86_64-apple-darwin` floor is
+10.12 while the cp39 tag defaults to 10.9. That refusal is a correctly-working check —
+the tag would have promised an OS the binary cannot load on — and the fix was to state
+the real floor, not to silence it.
