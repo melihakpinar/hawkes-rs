@@ -994,6 +994,40 @@ would be waste. §6 now promises the behaviour a caller can rely on — writable
 it changes nothing else, lifetime independent of any Rust value — and says explicitly
 that `OWNDATA` is not the way to check it. The test asserts the behaviour.
 
+## `hawk` is not bit-reproducible across platforms, and now says so
+
+The bit-identity reference was committed at first. CI failed on it: the manifest
+generated on macOS aarch64 recorded `0x4086d455b0fc6646` for one point and Linux
+x86_64 computed `0x4086d455b0fc6645`.
+
+**FMA contraction was the obvious suspect and it is wrong.** `rustc -O` on aarch64
+emits separate `fmul` and `fadd` for `acc + a * b`, not `fmadd` — checked by reading
+the emitted assembly rather than assuming. (The two forms *do* differ: of 200 000
+random triples, 24 192 give different results fused versus separate. That is why the
+hypothesis was plausible and why it needed checking rather than accepting.)
+
+What remains is deductive. IEEE-754 requires `+`, `-`, `*` and `/` to be correctly
+rounded, so those are identical on every conforming platform. It requires nothing of
+the sort for `exp`, `ln` and `exp_m1`, which come from the platform's libm — and this
+computation is built from them. Apple's libm and glibc's differ in the last bits.
+
+So the difference is not architecture as such; it is the C library. Two Linux machines
+with the same glibc agree.
+
+### What follows
+
+- **The reference is generated per machine**, into `target/`, and is not committed. A
+  committed one would assert a cross-platform reproducibility that does not hold.
+- **The bitwise test is unaffected.** It asks whether the *boundary* changes a number,
+  which is a same-machine question. A stale or foreign reference fails it loudly rather
+  than passing quietly, which is the safe direction.
+- **Nothing else in the repository relied on cross-platform bit equality.** The `tick`
+  differential compares at `1e-9` relative and the fixtures store `tick`'s values, not
+  `hawk`'s. This is the first thing that asked the question, and the answer is no.
+
+`hawk/tests/rust_nll_manifest.rs`, which existed to keep the committed reference
+current, is deleted: with generation at test time there is no staleness to guard.
+
 ## Summary
 
 | ID | Harness | What was broken | Result |

@@ -50,6 +50,17 @@ each in an environment with no Rust toolchain and with the sources removed, and 
 statement about reality when the workflow passes; until then treat the platforms as
 attempted rather than confirmed.
 
+## Bit-for-bit results do not travel between platforms
+
+`hawk`'s likelihood is built from `exp`, `ln` and `exp_m1`, which IEEE-754 does **not**
+require to be correctly rounded and which differ in the last bits between libm
+implementations. Two machines running the same wheel version can disagree by an ulp.
+
+`+`, `-`, `*` and `/` are correctly rounded and identical everywhere, so the difference
+is bounded and tiny — but it is not zero, and anything comparing results across
+machines must use a tolerance. `docs/verification-log.md` records how this was found
+and how FMA contraction was ruled out as the cause.
+
 ## Not covered, deliberately
 
 - **musllinux** is skipped (`CIBW_SKIP`). Nothing has been tested against musl and

@@ -55,11 +55,27 @@ jobs:
           name: wheels-${{ matrix.os }}-${{ matrix.archs }}
           path: wheelhouse/*.whl
 
+  # The Rust-side reference the bit-identity test compares against. It is generated
+  # here rather than committed because the values are platform-dependent: `exp`, `ln`
+  # and `exp_m1` are not correctly rounded and differ between libm implementations.
+  # This job runs on the same OS and architecture as `clean-install`, which is what
+  # makes the comparison meaningful; `clean-install` itself has no Rust toolchain.
+  manifest:
+    name: rust reference (linux x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: cargo run --example dump_fixture_nll target/rust-nll.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-nll-linux-x86_64
+          path: target/rust-nll.json
+
   # Step 9 and 10: the wheel installs and passes in an environment with no Rust
   # toolchain and no source tree, and pytest runs against the installed package.
   clean-install:
     name: clean install, CPython ${{ matrix.python }}
-    needs: build
+    needs: [build, manifest]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -76,6 +92,11 @@ jobs:
         with:
           name: wheels-ubuntu-latest-x86_64
           path: wheelhouse
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: rust-nll-linux-x86_64
+          path: reference
 
       # No source tree: the tests and the fixture corpus are copied out, and the Rust
       # sources and Cargo manifests are left behind. If anything still resolved
@@ -117,4 +138,5 @@ jobs:
         working-directory: /tmp/clean
         env:
           HAWK_FIXTURES: /tmp/clean/fixtures
+          HAWK_RUST_NLL: ${{ github.workspace }}/reference/rust-nll.json
         run: python -m pytest tests -q

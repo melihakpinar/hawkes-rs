@@ -39,6 +39,37 @@ jobs:
       - name: cargo test (default features)
         run: cargo test
 
+  python:
+    name: python bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install tooling
+        run: python -m pip install --upgrade pip maturin pytest mypy numpy
+
+      # Generated on this machine, for the reason in `dump_fixture_nll`: the values
+      # are platform-dependent, so a committed reference would assert a
+      # reproducibility that does not hold.
+      - name: Generate the Rust reference
+        run: cargo run --example dump_fixture_nll target/rust-nll.json
+
+      - name: Build and install the extension
+        run: maturin develop --manifest-path hawk-python/Cargo.toml
+        env:
+          VIRTUAL_ENV: ${{ env.pythonLocation }}
+
+      - name: mypy --strict
+        run: mypy --strict hawk-python/python/hawk hawk-python/examples
+
+      - name: pytest
+        run: python -m pytest hawk-python/tests -q
+
   fixtures:
     name: fixtures are reproducible
     runs-on: ubuntu-latest
