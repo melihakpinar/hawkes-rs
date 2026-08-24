@@ -122,11 +122,21 @@ becomes a 1-component one without anybody noticing.
 
 ---
 
-## 6. Returned arrays are freshly owned
+## 6. Returned arrays belong to the caller
 
 Anything the bindings return — simulated event times, a fitted excitation matrix, a
-gradient — is a new numpy array owning its own memory. Nothing aliases Rust-side
-storage, so nothing can dangle, and a caller may mutate a result freely.
+gradient — is a fresh array that the caller may mutate freely, and that never aliases
+live Rust state. Nothing can dangle: the buffer is numpy's to free.
+
+The precise mechanism differs by call, and `OWNDATA` is **not** a reliable way to check
+this. A matrix built row by row owns its buffer outright and reports `OWNDATA == True`.
+An array handed over from a Rust `Vec` is adopted by numpy through a base object, so
+`OWNDATA` reports `False` while the memory is still numpy's and the `Vec` no longer
+exists. Both are safe; only the second looks unusual.
+
+What is promised, and what the tests assert, is the behaviour rather than the flag:
+the array is writable, mutating it changes nothing else, and its lifetime does not
+depend on any Rust value outliving it.
 
 ---
 

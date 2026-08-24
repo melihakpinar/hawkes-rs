@@ -943,6 +943,57 @@ whose timestamps *do* change, the likelihood must change too.
 A fixed count would have been wrong twice over — the first draft asserted 30 of 44 and
 28 changed.
 
+## Harness 22 — the input contract and error mapping at the boundary (steps 4, 6)
+
+`hawk-python/tests/test_input_contract.py`. Each test names the `conventions.md` C8
+rule it enforces, so the boundary can neither widen nor narrow the contract.
+
+### What step 6 found
+
+`test_no_panic_reaches_the_interpreter` failed on its first run, on a mismatch between
+the parameters' dimension and the number of event components. Both directions were
+broken, in **Rust**, not in the bindings:
+
+- `d = 3` parameters with two components of events **silently returned a number**
+  (`8.324167375093932`). The missing component was treated as empty.
+- `d = 2` parameters with three components read past the end of the counts array:
+  `index out of bounds: the len is 2 but the index is 2`, surfacing in Python as
+  `pyo3_runtime.PanicException`.
+
+`assert_dimensions_agree` now guards all four evaluation entry points, and the bindings
+check first so a Python caller gets `ValueError` rather than a panic — which is what
+step 6 asks for. `multivariate_loglikelihood.rs` has a `#[should_panic]` test for each
+direction.
+
+Nothing in the Rust suite had exercised a mismatched pair, because every Rust caller
+constructs both from the same fixture. It took a binding whose caller can pass anything.
+
+## Harness 23 — the array policy (step 5)
+
+`hawk-python/tests/test_array_handling.py`, one test per section of
+`docs/python-array-handling.md`, written after the document and before the behaviour was
+settled.
+
+The load-bearing one is `test_a_fortran_ordered_excitation_matrix_is_not_transposed`.
+Reading an F-ordered array by stride rather than by index delivers **the transpose** —
+the exact failure C6 exists to prevent, undetectable on symmetric input. The test uses
+an asymmetric matrix and asserts both halves: that C order and F order agree, and that
+the transpose *disagrees*, so it cannot pass vacuously on a matrix too close to
+symmetric.
+
+### A promise that was wrong, and was corrected rather than asserted around
+
+`python-array-handling.md` §6 originally promised returned arrays "owning their own
+memory", and the test asserted `OWNDATA`. That failed: an array handed over from a Rust
+`Vec` is adopted by numpy through a base object, so `OWNDATA` is `False` while the
+memory is still numpy's and the `Vec` is gone.
+
+The matrix getters were changed to build genuinely owned arrays, which is worth doing.
+But `simulate` legitimately hands over a `Vec`, and forcing a copy to make a flag true
+would be waste. §6 now promises the behaviour a caller can rely on — writable, mutating
+it changes nothing else, lifetime independent of any Rust value — and says explicitly
+that `OWNDATA` is not the way to check it. The test asserts the behaviour.
+
 ## Summary
 
 | ID | Harness | What was broken | Result |

@@ -12,7 +12,7 @@
 //! computed through Python is compared **bit for bit** against the value the Rust
 //! test suite produces for the same input.
 
-use numpy::{PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2};
+use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use rand::SeedableRng;
@@ -284,8 +284,14 @@ impl MultivariateParameters {
     #[getter]
     fn excitation<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray2<f64>>> {
         let d = self.inner.dimension();
-        let flat = self.inner.excitation().to_vec();
-        PyArray1::from_vec(py, flat).reshape([d, d])
+        let flat = self.inner.excitation();
+        // `from_vec2` rather than `from_vec(..).reshape(..)`: the latter returns a
+        // view whose *base* owns the buffer, so `OWNDATA` is false on what the caller
+        // receives. Nothing aliases Rust memory either way, but
+        // `python-array-handling.md` §6 promises a freshly owned array and the promise
+        // should be literally true.
+        let rows: Vec<Vec<f64>> = (0..d).map(|i| flat[i * d..(i + 1) * d].to_vec()).collect();
+        PyArray2::from_vec2(py, &rows).map_err(Into::into)
     }
 
     #[getter]
@@ -378,6 +384,24 @@ fn events_from(events: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<f64>>> {
     Ok(out)
 }
 
+/// Rejects a mismatch between the parameters' dimension and the number of event
+/// components, before Rust can assert on it.
+///
+/// The Rust side treats this as a programming error and panics (a documented invariant
+/// of the pair). From Python it is ordinary invalid input, and a panic crossing the FFI
+/// boundary is exactly what M3 step 6 forbids, so the bindings check first.
+fn check_dimensions(parameters: &MultivariateParameters, events: &[Vec<f64>]) -> PyResult<()> {
+    if parameters.inner.dimension() != events.len() {
+        return Err(PyValueError::new_err(format!(
+            "parameters describe a {}-component process but {} components of events \
+             were given; they must agree",
+            parameters.inner.dimension(),
+            events.len()
+        )));
+    }
+    Ok(())
+}
+
 #[pyfunction]
 #[pyo3(name = "multivariate_negative_log_likelihood")]
 fn multivariate_negative_log_likelihood(
@@ -386,6 +410,7 @@ fn multivariate_negative_log_likelihood(
     horizon: f64,
 ) -> PyResult<f64> {
     let owned = events_from(events)?;
+    check_dimensions(parameters, &owned)?;
     let observation = hawk::multivariate::Observation::new(&owned, horizon).map_err(to_py_error)?;
     Ok(hawk::multivariate::negative_log_likelihood(
         &parameters.inner,
@@ -411,11 +436,15 @@ fn multivariate_negative_log_likelihood_and_gradient<'py>(
     horizon: f64,
 ) -> PyResult<MultivariateGradientTuple<'py>> {
     let owned = events_from(events)?;
+    check_dimensions(parameters, &owned)?;
     let observation = hawk::multivariate::Observation::new(&owned, horizon).map_err(to_py_error)?;
     let (value, gradient) =
         hawk::multivariate::negative_log_likelihood_and_gradient(&parameters.inner, &observation);
     let d = parameters.inner.dimension();
-    let excitation = PyArray1::from_vec(py, gradient.excitation).reshape([d, d])?;
+    let rows: Vec<Vec<f64>> = (0..d)
+        .map(|i| gradient.excitation[i * d..(i + 1) * d].to_vec())
+        .collect();
+    let excitation = PyArray2::from_vec2(py, &rows)?;
     Ok((
         value,
         PyArray1::from_vec(py, gradient.baseline),
@@ -433,6 +462,7 @@ fn multivariate_compensator_at_events<'py>(
     horizon: f64,
 ) -> PyResult<Vec<Bound<'py, PyArray1<f64>>>> {
     let owned = events_from(events)?;
+    check_dimensions(parameters, &owned)?;
     let observation = hawk::multivariate::Observation::new(&owned, horizon).map_err(to_py_error)?;
     Ok(
         hawk::multivariate::compensator_at_events(&parameters.inner, &observation)
@@ -462,6 +492,8 @@ fn multivariate_simulate<'py>(
 #[pyfunction]
 #[pyo3(name = "multivariate_fit")]
 fn multivariate_fit(events: &Bound<'_, PyAny>, horizon: f64) -> PyResult<MultivariateFit> {
+    // No dimension check: `fit` takes the dimension from the observation itself, so
+    // there is no second argument for it to disagree with.
     let owned = events_from(events)?;
     let observation = hawk::multivariate::Observation::new(&owned, horizon).map_err(to_py_error)?;
     let fit = hawk::multivariate::fit(&observation).map_err(to_py_error)?;

@@ -455,6 +455,36 @@ impl<'a> PooledWalk<'a> {
     }
 }
 
+/// Asserts that a `Parameters` and an `Observation` describe the same process.
+///
+/// # Panics
+///
+/// If the dimensions disagree. This is a documented invariant of the pair rather than
+/// a data error (CLAUDE.md §5): in Rust the two are separate arguments and a mismatch
+/// is a programming mistake, which is how `ndarray` and `nalgebra` treat a shape
+/// mismatch too.
+///
+/// It is not a theoretical hazard. Before this check existed, `d = 3` parameters with
+/// two components of events **silently returned a number** — the missing component was
+/// treated as empty — and `d = 2` parameters with three components read past the end of
+/// the counts array and panicked with `index out of bounds`. Both were found by the
+/// Python bindings' error-mapping test, which requires that no panic reach the
+/// interpreter.
+///
+/// A caller taking dimensions from user input must check first and return an error.
+/// `hawk-python` does, so a Python caller gets `ValueError`.
+#[track_caller]
+fn assert_dimensions_agree(parameters: &Parameters, observation: &Observation) {
+    assert_eq!(
+        parameters.dimension(),
+        observation.dimension(),
+        "parameters describe a {}-component process but the observation has {} \
+         components; they must agree",
+        parameters.dimension(),
+        observation.dimension()
+    );
+}
+
 /// Negative log-likelihood, `O(n*d)`.
 ///
 /// Transcription of `multivariate_loglikelihood.md` (M4.6) and §5.
@@ -470,6 +500,7 @@ impl<'a> PooledWalk<'a> {
 ///   floating-point multiplication is not associative and `univariate` computes
 ///   `(alpha*beta)*state`.
 pub fn negative_log_likelihood(parameters: &Parameters, observation: &Observation) -> f64 {
+    assert_dimensions_agree(parameters, observation);
     let d = parameters.dimension();
     let beta = parameters.decay;
     let horizon = observation.horizon();
@@ -560,6 +591,7 @@ pub fn negative_log_likelihood_and_gradient(
     parameters: &Parameters,
     observation: &Observation,
 ) -> (f64, Gradient) {
+    assert_dimensions_agree(parameters, observation);
     let d = parameters.dimension();
     let beta = parameters.decay;
     let horizon = observation.horizon();
@@ -698,6 +730,7 @@ pub fn negative_log_likelihood_and_gradient(
 /// differences are i.i.d. `Exp(1)`. Note this must be checked **per component**: a
 /// pooled test would let an error in one component be masked by another.
 pub fn compensator_at_events(parameters: &Parameters, observation: &Observation) -> Vec<Vec<f64>> {
+    assert_dimensions_agree(parameters, observation);
     let d = parameters.dimension();
     let beta = parameters.decay;
     let events = observation.events();
@@ -1090,6 +1123,7 @@ pub fn fit_from(observation: &Observation, start: Vec<f64>) -> Result<Fit, Error
 /// forbids building one ahead of a caller.
 #[cfg(feature = "rayon")]
 pub fn negative_log_likelihood_parallel(parameters: &Parameters, observation: &Observation) -> f64 {
+    assert_dimensions_agree(parameters, observation);
     use rayon::prelude::*;
 
     let d = parameters.dimension();
