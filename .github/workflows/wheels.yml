@@ -47,6 +47,13 @@ jobs:
       # interpreter and loaded by every later one, so the matrix is over platforms
       # rather than over CPython versions. Which interpreters actually load it is
       # checked below rather than inferred from the tag.
+      # The arm64 runner's toolchain carries only its own std, so the cross-built
+      # wheel fails with "can't find crate for `core`" until this target is added.
+      # maturin picks the triple up from the ARCHFLAGS cibuildwheel sets.
+      - name: Add the macOS x86_64 target
+        if: matrix.archs == 'x86_64' && startsWith(matrix.os, 'macos')
+        run: rustup target add x86_64-apple-darwin
+
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.2.0
         with:
