@@ -34,21 +34,34 @@ The import location is asserted by the test run, not eyeballed: if anything reso
 
 `.github/workflows/wheels.yml` builds:
 
-| OS | Runner | Architecture |
-| --- | --- | --- |
-| Linux | `ubuntu-latest` | `x86_64` (manylinux) |
-| Linux | `ubuntu-24.04-arm` | `aarch64` (manylinux) |
-| macOS | `macos-13` | `x86_64` |
-| macOS | `macos-14` | `arm64` |
-| Windows | `windows-latest` | `AMD64` |
+| OS | Runner | Architecture | Wheel imported on the runner |
+| --- | --- | --- | --- |
+| Linux | `ubuntu-latest` | `x86_64` (manylinux) | yes |
+| Linux | `ubuntu-24.04-arm` | `aarch64` (manylinux) | yes |
+| macOS | `macos-14` | `arm64` | yes |
+| macOS | `macos-14` | `x86_64` (cross-built) | **no** |
+| Windows | `windows-latest` | `AMD64` | yes |
 
 and then installs the Linux `x86_64` wheel into CPython 3.9, 3.10, 3.11, 3.12 and 3.13,
 each in an environment with no Rust toolchain and with the sources removed, and runs
 `pytest` against it.
 
-**This table is a description of the workflow, not yet of a green run.** It becomes a
-statement about reality when the workflow passes; until then treat the platforms as
-attempted rather than confirmed.
+### macOS `x86_64` is built but not executed
+
+It is cross-built on the arm64 runner and its test step is skipped, so it is a real
+artifact that has never been loaded by an interpreter.
+
+The Intel runner it used to be built on, `macos-13`, is retired. That was not obvious
+from the outside: a job targeting it sat **queued for 15 hours 49 minutes without ever
+starting**, while every other leg of the same run started within 6 seconds. Because
+`clean-install` depends on `build`, the whole workflow could never finish, so the
+verification for steps 9 and 10 was blocked by an unrelated platform's runner
+availability.
+
+This is the same standard Windows-on-ARM is excluded under, resolved the other way.
+The difference is that Intel Macs are common enough that shipping an unexecuted wheel
+is more useful than shipping none — provided the table says which column it falls in,
+which is why that column exists.
 
 ## Bit-for-bit results do not travel between platforms
 

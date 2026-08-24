@@ -20,8 +20,18 @@ jobs:
             archs: x86_64
           - os: ubuntu-24.04-arm
             archs: aarch64
-          - os: macos-13
+          # macOS x86_64 is cross-built on the arm64 runner. The `macos-13` Intel
+          # runner is retired: a job targeting it sat queued for 15h49m without
+          # starting, while every other leg started within 6 seconds, and because
+          # `clean-install` needs `build` the whole workflow could never finish.
+          #
+          # The wheel is built but NOT executed there, and `docs/python-wheels.md`
+          # says so rather than implying it was tested. That is the same standard
+          # Windows-on-ARM is held to; the difference is that Intel Macs are common
+          # enough that shipping an unexecuted wheel beats shipping none.
+          - os: macos-14
             archs: x86_64
+            test_skip: "*_x86_64"
           - os: macos-14
             archs: arm64
           - os: windows-latest
@@ -49,6 +59,7 @@ jobs:
             curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
           CIBW_ENVIRONMENT_LINUX: 'PATH="$HOME/.cargo/bin:$PATH"'
           CIBW_TEST_COMMAND: python -c "import hawk; print(hawk.__version__)"
+          CIBW_TEST_SKIP: ${{ matrix.test_skip }}
 
       - uses: actions/upload-artifact@v4
         with:
