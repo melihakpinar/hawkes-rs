@@ -138,6 +138,17 @@ jobs:
           cp -r tests/fixtures /tmp/clean/fixtures
           ls /tmp/clean
 
+      # ubuntu-latest ships a preinstalled Rust toolchain, so this job was not
+      # testing what it claimed to until the guard below failed and said so. The
+      # toolchain is removed rather than the guard relaxed: the guard is the only
+      # thing standing between "the wheel is self-contained" and "we never checked".
+      - name: Remove the preinstalled Rust toolchain
+        run: |
+          rustup self uninstall -y || true
+          sudo rm -rf "${CARGO_HOME:-$HOME/.cargo}" "${RUSTUP_HOME:-$HOME/.rustup}" \
+            /usr/share/rust /usr/local/cargo ~/.cargo ~/.rustup
+          hash -r
+
       - name: Confirm there is no Rust toolchain
         run: |
           if command -v cargo >/dev/null 2>&1; then
