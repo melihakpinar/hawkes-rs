@@ -39,6 +39,11 @@ jobs:
             deployment_target: "10.12"
           - os: macos-14
             archs: arm64
+            # Every macOS leg must set this. Left unset, the env key is still
+            # present but empty, and cibuildwheel fails parsing it as a version.
+            # 11.0 is Rust's minimum for aarch64-apple-darwin and is what the tag
+            # already said, so this pins the existing floor rather than moving it.
+            deployment_target: "11.0"
           - os: windows-latest
             archs: AMD64
     steps:
