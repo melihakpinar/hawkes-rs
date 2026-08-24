@@ -64,7 +64,6 @@ struct Fixture {
     end_time: f64,
     baseline: Vec<f64>,
     adjacency: Vec<Vec<f64>>,
-    spectral_radius: f64,
     n_jumps: usize,
     /// True when the scenario contains exact ties. Tied scenarios are hand-built,
     /// not simulated: Ogata thinning draws continuous inter-arrival times and never
@@ -304,7 +303,7 @@ fn fixtures_are_internally_consistent() {
     for fixture in &fixtures {
         let name = &fixture.name;
         assert_eq!(
-            fixture.schema_version, 2,
+            fixture.schema_version, 3,
             "{name}: unexpected schema version"
         );
         assert!(fixture.decay > 0.0, "{name}: decay must be positive");
@@ -343,13 +342,25 @@ fn fixtures_are_internally_consistent() {
         );
 
         // Under tick's kernel convention the adjacency matrix *is* the branching
-        // matrix, so stationarity is spectral_radius < 1
+        // matrix, so stationarity is spectral radius < 1
         // (docs/derivations/conventions.md C2). A non-stationary fixture would be a
-        // generator bug: these are simulated on a finite horizon and must terminate.
+        // generator bug: the simulated ones run on a finite horizon and must
+        // terminate, and the hand-built ones were chosen stationary.
+        //
+        // Computed here rather than read from the file. The fixture used to store it,
+        // and that value came from LAPACK, whose kernel selection depends on the CPU
+        // it runs on -- which made the d = 10 fixture pass and fail across CI runs of
+        // identical content. `hawk`'s routine is pure f64 arithmetic and
+        // deterministic; `spectral_radius.rs` pins it, including on the reducible
+        // matrices where the naive method is wrong.
+        let excitation: Vec<f64> = fixture.adjacency.iter().flatten().copied().collect();
+        let parameters =
+            multivariate::Parameters::new(fixture.baseline.clone(), excitation, fixture.decay)
+                .unwrap_or_else(|e| panic!("{name}: {e}"));
         assert!(
-            fixture.spectral_radius < 1.0,
-            "{name}: spectral radius {} is not stationary",
-            fixture.spectral_radius
+            parameters.is_stationary(),
+            "{name}: branching-ratio spectral radius {} is not stationary",
+            parameters.branching_ratio_spectral_radius()
         );
 
         let counted: usize = fixture.events.iter().map(Vec::len).sum();

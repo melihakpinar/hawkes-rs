@@ -180,7 +180,6 @@
   "n_jumps": 8,
   "n_nodes": 2,
   "name": "bivariate_tied_cross_component",
-  "schema_version": 2,
-  "spectral_radius": 0.35,
+  "schema_version": 3,
   "tick_loss_convention": "negative log-likelihood ratio w.r.t. unit-rate Poisson, divided by n_jumps; see docs/open-questions.md OQ-8"
 }

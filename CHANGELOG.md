@@ -37,6 +37,18 @@ First public API. `hawk::univariate`:
 At `d = 1` the multivariate path is **bitwise identical** to `univariate`, for both
 value and gradient.
 
+### Fixed
+
+- Fixture schema 3 drops `spectral_radius`. It came from LAPACK, whose kernel selection
+  depends on the CPU it runs on, which made the `d = 10` fixture pass and fail across CI
+  runs of identical content. It is derivable from `adjacency`, which is in the file.
+
+- `multivariate::Parameters::branching_ratio_spectral_radius` returned `1.0` for a
+  nilpotent excitation matrix, whose spectral radius is `0`, so a cascade that dies out
+  after finitely many steps was reported as explosive and had no stationary mean
+  intensity. Caused by an early exit that fired while the upper bound was temporarily
+  plateaued. Found by widening the regression cases to defective matrices.
+
 ### Notes on M2
 
 - The recursion groups distinct times **pooled across all components**. Advancing per

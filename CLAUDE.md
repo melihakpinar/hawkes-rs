@@ -160,6 +160,13 @@ it. Randomized sweeps are not a nicety here, they are the only thing that covers
 class. Every single-case test must be accompanied by a randomized one over the same
 code path.
 
+**A sabotage that survives one case has not been refuted.** Whether a mutation is
+observable can depend on the specific values being accumulated — a multiplicity, a
+magnitude, a distance to the horizon. When a sabotage comes back green, widen the case
+set to the regime where the mutated term dominates before concluding the code is
+equivalent. Two defects in this repository were found this way, and both had first
+reported green.
+
 **Do not write a test whose expected value you computed with the code under test.**
 Expected values come from a paper, from `tick`, or from an independent hand
 calculation recorded in `docs/derivations/`.
