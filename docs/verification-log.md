@@ -1122,3 +1122,43 @@ the table would otherwise imply five tested platforms when four is the honest nu
 10.12 while the cp39 tag defaults to 10.9. That refusal is a correctly-working check —
 the tag would have promised an OS the binary cannot load on — and the fix was to state
 the real floor, not to silence it.
+
+## S48 — the fixture loader's float round-trip, guarded permanently
+
+The `serde_json` defect (13 of 44 evaluation points read one ulp away from the values
+`tick` simulated) was pinned by three literals in `hawk/tests/fixture_parsing.rs`. That
+holds only for those three strings in that one corpus. If `float_roundtrip` is dropped
+from `Cargo.toml`, or the corpus is regenerated with different values, or the loader
+changes shape, the same silent corruption returns.
+
+Three guards now stand in the way, each with a different oracle:
+
+| Test | Oracle |
+| --- | --- |
+| `hard_values_survive_the_fixture_round_trip` | the **input value** — write it, read it, require the bits back. No parser supplies the expected answer. |
+| `a_sweep_of_random_bit_patterns_survives_the_round_trip` | the same, over 20 000 seeded draws from the whole finite `f64` range |
+| `every_fixture_literal_parses_to_the_same_double_as_the_standard_library` | `str::parse::<f64>`, a separate correctly-rounded implementation, over every literal in every committed fixture |
+
+The sweep draws random **bit patterns**, not random magnitudes. Sampling `f64` on
+`[0, 1)` would never produce a subnormal, an extreme exponent, or a long mantissa —
+exactly the population where parsers fail.
+
+The corpus scan finds its own literals with a hand-written token scanner rather than by
+walking a `serde_json::Value`. The parser is the code under test, and one that mis-reads
+a number can equally mis-report where it was.
+
+### Sabotage
+
+Removing `features = ["float_roundtrip"]` from the workspace `serde_json` turns **all
+five** tests in the file red. The failures are distinct rather than one defect reported
+five times:
+
+- `0.9999999999999999` is written and read back as exactly `1.0` — a value one ulp
+  below a power of two crossing it.
+- The random sweep fails on draw 3 of 20 000: `-6.8947290970152425e-149`, one ulp.
+- The corpus scan fails on `-0.21750229952873582` in `univariate_tiny.json`, which is
+  **not** one of the three pinned literals. The pinned three would not have caught this
+  file at all.
+
+That last point is the reason the corpus scan exists. Restoring the feature returns all
+five to green.
