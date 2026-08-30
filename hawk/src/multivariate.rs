@@ -145,6 +145,8 @@ impl Parameters {
     ///
     /// # Method
     ///
+    /// Derivation and proofs: `docs/derivations/spectral_radius.md`.
+    ///
     /// `alpha` is non-negative, so its spectral radius is its Perron root and can be
     /// bracketed by the Collatz-Wielandt bounds: for any strictly positive `x`,
     ///
@@ -159,7 +161,11 @@ impl Parameters {
     /// irreducible: for a diagonal matrix `(A x)_i / x_i = m_i` exactly, so the
     /// bracket is `[min m_i, max m_i]` at every step and never closes. Returning the
     /// midpoint gives `0.45` for `diag(0.2, 0.7, 0.4)`, whose spectral radius is
-    /// `0.7` — that case is in the tests.
+    /// `0.7` — that case is in the tests. (`0.45` is the midpoint of the mathematical
+    /// bracket `[0.2, 0.7]`. The midpoint this code would actually return is `0.5167`,
+    /// because the vanishing component underflows into the subnormal range and its
+    /// computed ratio drifts; `spectral_radius.md` §3.2 has the measurement. `upper` is
+    /// unaffected, which is a second reason to return it.)
     ///
     /// Power iteration is run on `A + I` rather than `A`, and 1 subtracted at the
     /// end: `rho(A + I) = rho(A) + 1` for non-negative `A`, and shifting makes the
