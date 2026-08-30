@@ -78,6 +78,12 @@ comparable. Holding `alpha_ij` fixed instead would make the `d = 100` process ex
 The realized event count differs from the nominal `n` because simulation is random; the
 realized count is reported everywhere.
 
+For the `simulate` benchmark the seed is advanced per repetition, so no repetition
+reuses another's random stream and the timing is not that of one lucky realization. The
+two libraries use different generators, so their realized counts differ from each other
+even at the same horizon; both counts are reported and the comparison is stated per
+event.
+
 ## 4. Timing protocol
 
 - 1 warmup run, discarded.
@@ -170,6 +176,12 @@ maximizes the likelihood, `tick` minimizes a least-squares contrast. The `d = 10
 `d = 100` benchmarks therefore compare two different estimators, not two
 implementations of one. This is stated wherever those numbers appear, and §5.5 is how
 the difference is made visible rather than assumed.
+
+At `d = 1`, where both objectives work, **both are measured**. That is what makes the
+`d > 1` numbers interpretable: it shows what changing the objective costs on a case
+where the change is the only difference. Without it, the least-squares timings at
+`d = 10` and `d = 100` would be uninterpretable — fast, but with no way to tell how much
+of the speed is the objective and how much is the implementation.
 
 This is a capability finding, not a timing one, and it is reported as such.
 
