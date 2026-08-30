@@ -40,7 +40,8 @@ fn build(times: &[f64], horizon: f64, baseline: f64, excitation: f64, decay: f64
     let multi_parameters =
         multivariate::Parameters::new(vec![baseline], vec![excitation], decay).unwrap();
     let multi_observation = multivariate::Observation::new(&events, horizon).unwrap();
-    let multi = multivariate::negative_log_likelihood(&multi_parameters, &multi_observation);
+    let multi =
+        multivariate::negative_log_likelihood(&multi_parameters, &multi_observation).unwrap();
     (uni, multi)
 }
 
@@ -67,7 +68,8 @@ fn assert_gradient_identical(times: &[f64], horizon: f64, p: (f64, f64, f64), co
     let multi_parameters = multivariate::Parameters::new(vec![p.0], vec![p.1], p.2).unwrap();
     let multi_observation = multivariate::Observation::new(&events, horizon).unwrap();
     let (multi_value, multi_gradient) =
-        multivariate::negative_log_likelihood_and_gradient(&multi_parameters, &multi_observation);
+        multivariate::negative_log_likelihood_and_gradient(&multi_parameters, &multi_observation)
+            .unwrap();
 
     assert_eq!(
         uni_value.to_bits(),
@@ -206,7 +208,7 @@ proptest! {
         let events = vec![times.clone()];
         let mp = multivariate::Parameters::new(vec![baseline], vec![excitation], decay).unwrap();
         let mo = multivariate::Observation::new(&events, horizon).unwrap();
-        let (mv, mg) = multivariate::negative_log_likelihood_and_gradient(&mp, &mo);
+        let (mv, mg) = multivariate::negative_log_likelihood_and_gradient(&mp, &mo).unwrap();
 
         prop_assert_eq!(uv.to_bits(), mv.to_bits());
         prop_assert_eq!(ug.baseline.to_bits(), mg.baseline[0].to_bits());

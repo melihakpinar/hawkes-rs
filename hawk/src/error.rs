@@ -76,6 +76,21 @@ pub enum Error {
         dimension: usize,
     },
 
+    /// The parameters and the observation are supplied independently and must
+    /// describe the same process.
+    ///
+    /// Distinct from `DimensionMismatch`, which is about the internal shape of a
+    /// single `Parameters` value: `baseline` against `excitation`. This one is two
+    /// separate values disagreeing with each other.
+    #[error(
+        "parameters describe a {parameters}-component process but the observation \
+         has {observation} components; they must agree"
+    )]
+    ProcessDimensionMismatch {
+        parameters: usize,
+        observation: usize,
+    },
+
     /// Excitation entries may be zero — a component that excites nothing is
     /// ordinary — but never negative.
     #[error("excitation[{row}][{column}] must be non-negative and finite, got {value}")]

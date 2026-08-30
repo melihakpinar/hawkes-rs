@@ -21,7 +21,10 @@ use common::{
     Lcg, RECURSION_TOLERANCE, brute_force_multivariate_negative_log_likelihood as brute_force,
     multivariate_computation_scale as scale_of,
 };
-use hawk::multivariate::{Observation, Parameters, negative_log_likelihood};
+use hawk::multivariate::{
+    Observation, Parameters, compensator_at_events, negative_log_likelihood,
+    negative_log_likelihood_and_gradient,
+};
 use proptest::prelude::*;
 
 /// Same bound and same reasoning as the univariate gate; see
@@ -29,7 +32,7 @@ use proptest::prelude::*;
 const MAX_EVENTS_FOR_COMPARISON: usize = 50_000;
 
 fn assert_agrees(parameters: &Parameters, observation: &Observation, context: &str) {
-    let recursive = negative_log_likelihood(parameters, observation);
+    let recursive = negative_log_likelihood(parameters, observation).unwrap();
     let reference = brute_force(parameters, observation);
     let scale = scale_of(parameters, observation);
     let discrepancy = (recursive - reference).abs();
@@ -55,7 +58,7 @@ fn cross_component_ties_do_not_excite() {
     let events = vec![vec![1.0, 2.5], vec![2.5, 4.0]];
     let observation = Observation::new(&events, 6.0).unwrap();
 
-    let actual = negative_log_likelihood(&p, &observation);
+    let actual = negative_log_likelihood(&p, &observation).unwrap();
     let expected = 10.329672183654555;
     assert!(
         (actual - expected).abs() <= 1e-12 * expected.abs(),
@@ -68,7 +71,7 @@ fn cross_component_ties_do_not_excite() {
     // defect is invisible on simulated data.
     let untied = vec![vec![1.0, 2.5], vec![2.6, 4.0]];
     let untied_observation = Observation::new(&untied, 6.0).unwrap();
-    let untied_value = negative_log_likelihood(&p, &untied_observation);
+    let untied_value = negative_log_likelihood(&p, &untied_observation).unwrap();
     assert!(
         (untied_value - 10.22398192492856).abs() <= 1e-12,
         "untied control gave {untied_value:?}"
@@ -194,7 +197,7 @@ fn multivariate_scale_matches_a_hand_calculation() {
          {HAND_SCALE_MIXED_SIGNS:?}. Taking |sum ln lambda| instead of \
          sum |ln lambda| would give about {SIGNED_SUM_VARIANT:?}."
     );
-    let nll = negative_log_likelihood(&p, &observation);
+    let nll = negative_log_likelihood(&p, &observation).unwrap();
     assert!(
         (nll - HAND_NLL_MIXED_SIGNS).abs() <= 1e-12 * HAND_NLL_MIXED_SIGNS,
         "nll gave {nll:?}, hand calculation gives {HAND_NLL_MIXED_SIGNS:?}"
@@ -207,7 +210,7 @@ fn multivariate_scale_matches_a_hand_calculation() {
 fn the_multivariate_gate_rejects_just_above_its_sensitivity() {
     let (p, events, horizon) = mixed_sign_case();
     let observation = Observation::new(&events, horizon).unwrap();
-    let recursive = negative_log_likelihood(&p, &observation);
+    let recursive = negative_log_likelihood(&p, &observation).unwrap();
     let reference = brute_force(&p, &observation);
     let scale = scale_of(&p, &observation);
     let boundary = RECURSION_TOLERANCE * HAND_SCALE_MIXED_SIGNS;
@@ -264,7 +267,7 @@ proptest! {
         let p = Parameters::new(baseline, excitation, decay).unwrap();
         let observation = Observation::new(&events, horizon).unwrap();
 
-        let recursive = negative_log_likelihood(&p, &observation);
+        let recursive = negative_log_likelihood(&p, &observation).unwrap();
         let reference = brute_force(&p, &observation);
         let scale = scale_of(&p, &observation);
         let discrepancy = (recursive - reference).abs();
@@ -285,22 +288,60 @@ proptest! {
 /// out of bounds`. Both were found by the Python bindings' error-mapping test, which
 /// requires that no panic reach the interpreter.
 ///
-/// The Rust side treats this as a documented invariant of the pair and panics
-/// (CLAUDE.md §5); `hawk-python` checks first and raises `ValueError`.
+/// The caller supplies the two halves independently, so a mismatch is invalid input
+/// and comes back as an error value rather than a panic (CLAUDE.md §5).
+///
+/// # Sabotage
+///
+/// Deleting the `ensure_dimensions_agree` call from `negative_log_likelihood` turns
+/// both of these red — the first with an `Ok`, the second with the out-of-bounds panic
+/// it used to have. Recorded in `docs/verification-log.md`.
 #[test]
-#[should_panic(expected = "they must agree")]
 fn too_few_event_components_is_not_silently_accepted() {
     let p = parameters(vec![0.4, 0.4, 0.4], vec![0.1; 9], 1.0);
     let events = vec![vec![1.0], vec![2.0]];
     let observation = Observation::new(&events, 5.0).unwrap();
-    negative_log_likelihood(&p, &observation);
+    assert_eq!(
+        negative_log_likelihood(&p, &observation),
+        Err(hawk::Error::ProcessDimensionMismatch {
+            parameters: 3,
+            observation: 2,
+        })
+    );
 }
 
 #[test]
-#[should_panic(expected = "they must agree")]
 fn too_many_event_components_is_not_an_out_of_bounds_read() {
     let p = parameters(vec![0.4, 0.4], vec![0.1; 4], 1.0);
     let events = vec![vec![1.0], vec![2.0], vec![3.0]];
     let observation = Observation::new(&events, 5.0).unwrap();
-    negative_log_likelihood(&p, &observation);
+    assert_eq!(
+        negative_log_likelihood(&p, &observation),
+        Err(hawk::Error::ProcessDimensionMismatch {
+            parameters: 2,
+            observation: 3,
+        })
+    );
+}
+
+/// The same guard on the other three entry points. `negative_log_likelihood` is the
+/// one that used to be wrong in two different ways, but nothing makes the other three
+/// safer, and each reaches the counts array by the same route.
+#[test]
+fn every_multivariate_entry_point_rejects_a_mismatch() {
+    let p = parameters(vec![0.4, 0.4, 0.4], vec![0.1; 9], 1.0);
+    let events = vec![vec![1.0], vec![2.0]];
+    let observation = Observation::new(&events, 5.0).unwrap();
+    let expected = hawk::Error::ProcessDimensionMismatch {
+        parameters: 3,
+        observation: 2,
+    };
+    assert_eq!(
+        negative_log_likelihood_and_gradient(&p, &observation).unwrap_err(),
+        expected
+    );
+    assert_eq!(
+        compensator_at_events(&p, &observation).unwrap_err(),
+        expected
+    );
 }

@@ -224,7 +224,7 @@ proptest! {
 
         // Tolerance-free: the fit must be at least as good as the truth, or the
         // optimizer has not done its job.
-        let at_truth = negative_log_likelihood(&truth, &observation);
+        let at_truth = negative_log_likelihood(&truth, &observation).unwrap();
         prop_assert!(
             fitted.negative_log_likelihood <= at_truth + 1e-6,
             "fit found {:?} but the truth gives {:?}",

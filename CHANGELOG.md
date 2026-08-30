@@ -67,6 +67,19 @@ value and gradient.
 
 ### Changed
 
+- **Breaking.** `multivariate::negative_log_likelihood`,
+  `negative_log_likelihood_and_gradient`, `compensator_at_events` and
+  `negative_log_likelihood_parallel` return `Result` instead of the bare value. They
+  previously panicked when the `Parameters` and the `Observation` disagreed on the
+  number of components. Both halves come from the caller, so that is invalid input and
+  CLAUDE.md §5 makes it an error value. Callers add `?` or `.unwrap()`; nothing about
+  the computed numbers changed.
+- `Error::ProcessDimensionMismatch` is the new variant, distinct from
+  `DimensionMismatch`, which remains about the internal shape of a single `Parameters`
+  (`baseline` against `excitation`).
+- `hawk-python` no longer carries a `check_dimensions` shim. The `ValueError` a Python
+  caller sees is now raised from the same check a Rust caller gets, so the two cannot
+  drift apart.
 - `negative_log_likelihood` computes the value in one pass without computing the
   gradient. It previously delegated to `negative_log_likelihood_and_gradient` and
   discarded the gradient. The returned value is bitwise unchanged, enforced by

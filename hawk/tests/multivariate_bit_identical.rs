@@ -29,8 +29,8 @@ use hawk::multivariate::{
 use proptest::prelude::*;
 
 fn assert_bit_identical(parameters: &Parameters, observation: &Observation, context: &str) {
-    let value_only = negative_log_likelihood(parameters, observation);
-    let (with_gradient, _) = negative_log_likelihood_and_gradient(parameters, observation);
+    let value_only = negative_log_likelihood(parameters, observation).unwrap();
+    let (with_gradient, _) = negative_log_likelihood_and_gradient(parameters, observation).unwrap();
     assert_eq!(
         value_only.to_bits(),
         with_gradient.to_bits(),
@@ -130,8 +130,8 @@ proptest! {
 
         let p = Parameters::new(baseline, excitation, decay).unwrap();
         let observation = Observation::new(&events, horizon).unwrap();
-        let value_only = negative_log_likelihood(&p, &observation);
-        let (with_gradient, _) = negative_log_likelihood_and_gradient(&p, &observation);
+        let value_only = negative_log_likelihood(&p, &observation).unwrap();
+        let (with_gradient, _) = negative_log_likelihood_and_gradient(&p, &observation).unwrap();
         prop_assert_eq!(value_only.to_bits(), with_gradient.to_bits(),
             "value-only {:?} vs value+gradient {:?}", value_only, with_gradient);
     }

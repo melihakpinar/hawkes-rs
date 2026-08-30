@@ -81,7 +81,7 @@ fn main() {
                 fixture.decay,
             )
             .expect("fixture parameters are valid");
-            let value = multivariate::negative_log_likelihood(&parameters, &observation);
+            let value = multivariate::negative_log_likelihood(&parameters, &observation).unwrap();
             entries.push(format!(
                 "    {{\n      \"fixture\": {:?},\n      \"label\": {:?},\n      \
                  \"n_nodes\": {},\n      \"negative_log_likelihood_bits\": \"0x{:016x}\",\n      \
