@@ -35,8 +35,8 @@ fn main() {
             samples.sort_by(|a, b| a.partial_cmp(b).unwrap());
             samples[2]
         };
-        let sequential = time(&|| negative_log_likelihood(&p, &observation));
-        let parallel = time(&|| negative_log_likelihood_parallel(&p, &observation));
+        let sequential = time(&|| negative_log_likelihood(&p, &observation).unwrap());
+        let parallel = time(&|| negative_log_likelihood_parallel(&p, &observation).unwrap());
         println!(
             "d={d:<3} n={n:<8} sequential={sequential:.6}s  parallel={parallel:.6}s  \
              ratio={:.2}x",

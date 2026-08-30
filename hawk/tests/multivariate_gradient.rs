@@ -56,7 +56,7 @@ fn unflatten(flat: &[f64], d: usize) -> Parameters {
 }
 
 fn flat_gradient(p: &Parameters, observation: &Observation) -> Vec<f64> {
-    let (_, gradient) = negative_log_likelihood_and_gradient(p, observation);
+    let (_, gradient) = negative_log_likelihood_and_gradient(p, observation).unwrap();
     let mut flat = gradient.baseline.clone();
     flat.extend_from_slice(&gradient.excitation);
     flat.push(gradient.decay);
@@ -64,7 +64,7 @@ fn flat_gradient(p: &Parameters, observation: &Observation) -> Vec<f64> {
 }
 
 fn flat_log_gradient(p: &Parameters, observation: &Observation) -> Vec<f64> {
-    let (_, gradient) = negative_log_likelihood_and_gradient(p, observation);
+    let (_, gradient) = negative_log_likelihood_and_gradient(p, observation).unwrap();
     let log_gradient = gradient.to_log_parameter_space(p);
     let mut flat = log_gradient.baseline.clone();
     flat.extend_from_slice(&log_gradient.excitation);
@@ -121,7 +121,7 @@ fn check(p: &Parameters, events: &[Vec<f64>], horizon: f64, label: &str) {
         |v| {
             let perturbed = unflatten(v, d);
             let obs = Observation::new(events, horizon).unwrap();
-            negative_log_likelihood(&perturbed, &obs)
+            negative_log_likelihood(&perturbed, &obs).unwrap()
         },
         &point,
         STEP,
@@ -145,7 +145,7 @@ fn check(p: &Parameters, events: &[Vec<f64>], horizon: f64, label: &str) {
                 let natural: Vec<f64> = v.iter().map(|x| x.exp()).collect();
                 let perturbed = unflatten(&natural, d);
                 let obs = Observation::new(events, horizon).unwrap();
-                negative_log_likelihood(&perturbed, &obs)
+                negative_log_likelihood(&perturbed, &obs).unwrap()
             },
             &log_point,
             STEP,
@@ -200,7 +200,7 @@ fn matches_on_degenerate_input() {
     let p = Parameters::new(vec![0.8, 0.4], vec![0.2, 0.1, 0.05, 0.3], 1.2).unwrap();
     let empty = vec![vec![], vec![]];
     let observation = Observation::new(&empty, 5.0).unwrap();
-    let (nll, gradient) = negative_log_likelihood_and_gradient(&p, &observation);
+    let (nll, gradient) = negative_log_likelihood_and_gradient(&p, &observation).unwrap();
     assert!(
         (nll - (0.8 + 0.4) * 5.0).abs() < 1e-15,
         "empty: nll should be sum(mu)*T"
@@ -277,7 +277,7 @@ proptest! {
             |v| {
                 let perturbed = unflatten(v, d);
                 let obs = Observation::new(&events, horizon).unwrap();
-                negative_log_likelihood(&perturbed, &obs)
+                negative_log_likelihood(&perturbed, &obs).unwrap()
             },
             &point, STEP);
         let analytic = flat_gradient(&p, &observation);
@@ -291,7 +291,7 @@ proptest! {
                 let natural: Vec<f64> = v.iter().map(|x| x.exp()).collect();
                 let perturbed = unflatten(&natural, d);
                 let obs = Observation::new(&events, horizon).unwrap();
-                negative_log_likelihood(&perturbed, &obs)
+                negative_log_likelihood(&perturbed, &obs).unwrap()
             },
             &log_point, STEP);
         let log_analytic = flat_log_gradient(&p, &observation);

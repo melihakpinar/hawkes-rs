@@ -455,14 +455,11 @@ impl<'a> PooledWalk<'a> {
     }
 }
 
-/// Asserts that a `Parameters` and an `Observation` describe the same process.
+/// Checks that a `Parameters` and an `Observation` describe the same process.
 ///
-/// # Panics
-///
-/// If the dimensions disagree. This is a documented invariant of the pair rather than
-/// a data error (CLAUDE.md §5): in Rust the two are separate arguments and a mismatch
-/// is a programming mistake, which is how `ndarray` and `nalgebra` treat a shape
-/// mismatch too.
+/// The two are independent arguments and a caller can take their dimensions from
+/// different places, so a mismatch is invalid input rather than a violated internal
+/// invariant. CLAUDE.md §5 makes that an error value, not a panic.
 ///
 /// It is not a theoretical hazard. Before this check existed, `d = 3` parameters with
 /// two components of events **silently returned a number** — the missing component was
@@ -470,19 +467,17 @@ impl<'a> PooledWalk<'a> {
 /// the counts array and panicked with `index out of bounds`. Both were found by the
 /// Python bindings' error-mapping test, which requires that no panic reach the
 /// interpreter.
-///
-/// A caller taking dimensions from user input must check first and return an error.
-/// `hawk-python` does, so a Python caller gets `ValueError`.
-#[track_caller]
-fn assert_dimensions_agree(parameters: &Parameters, observation: &Observation) {
-    assert_eq!(
-        parameters.dimension(),
-        observation.dimension(),
-        "parameters describe a {}-component process but the observation has {} \
-         components; they must agree",
-        parameters.dimension(),
-        observation.dimension()
-    );
+fn ensure_dimensions_agree(
+    parameters: &Parameters,
+    observation: &Observation,
+) -> Result<(), Error> {
+    if parameters.dimension() != observation.dimension() {
+        return Err(Error::ProcessDimensionMismatch {
+            parameters: parameters.dimension(),
+            observation: observation.dimension(),
+        });
+    }
+    Ok(())
 }
 
 /// Negative log-likelihood, `O(n*d)`.
@@ -499,8 +494,11 @@ fn assert_dimensions_agree(parameters: &Parameters, observation: &Observation) {
 /// - Group the intensity product as `(alpha[i][j] * beta) * state[j]`, because
 ///   floating-point multiplication is not associative and `univariate` computes
 ///   `(alpha*beta)*state`.
-pub fn negative_log_likelihood(parameters: &Parameters, observation: &Observation) -> f64 {
-    assert_dimensions_agree(parameters, observation);
+pub fn negative_log_likelihood(
+    parameters: &Parameters,
+    observation: &Observation,
+) -> Result<f64, Error> {
+    ensure_dimensions_agree(parameters, observation)?;
     let d = parameters.dimension();
     let beta = parameters.decay;
     let horizon = observation.horizon();
@@ -510,7 +508,7 @@ pub fn negative_log_likelihood(parameters: &Parameters, observation: &Observatio
         total += parameters.baseline[i] * horizon;
     }
     if observation.is_empty() {
-        return total;
+        return Ok(total);
     }
 
     let mut walk = PooledWalk::new(observation.events());
@@ -575,7 +573,7 @@ pub fn negative_log_likelihood(parameters: &Parameters, observation: &Observatio
     for part in &log_term_parts {
         log_term += part;
     }
-    total - log_term
+    Ok(total - log_term)
 }
 
 /// Negative log-likelihood and its analytic gradient, in one `O(n*d)` pass.
@@ -590,8 +588,8 @@ pub fn negative_log_likelihood(parameters: &Parameters, observation: &Observatio
 pub fn negative_log_likelihood_and_gradient(
     parameters: &Parameters,
     observation: &Observation,
-) -> (f64, Gradient) {
-    assert_dimensions_agree(parameters, observation);
+) -> Result<(f64, Gradient), Error> {
+    ensure_dimensions_agree(parameters, observation)?;
     let d = parameters.dimension();
     let beta = parameters.decay;
     let horizon = observation.horizon();
@@ -601,14 +599,14 @@ pub fn negative_log_likelihood_and_gradient(
         total += parameters.baseline[i] * horizon;
     }
     if observation.is_empty() {
-        return (
+        return Ok((
             total,
             Gradient {
                 baseline: vec![horizon; d],
                 excitation: vec![0.0; d * d],
                 decay: 0.0,
             },
-        );
+        ));
     }
 
     let mut walk = PooledWalk::new(observation.events());
@@ -701,14 +699,14 @@ pub fn negative_log_likelihood_and_gradient(
         }
     }
 
-    (
+    Ok((
         negative_log_likelihood,
         Gradient {
             baseline,
             excitation,
             decay,
         },
-    )
+    ))
 }
 
 /// The compensator `Lambda_i(t) = int_0^t lambda_i(u) du`, evaluated at each
@@ -729,14 +727,17 @@ pub fn negative_log_likelihood_and_gradient(
 /// each `{Lambda_i(t^i_k)}_k` is a unit-rate Poisson process, so the successive
 /// differences are i.i.d. `Exp(1)`. Note this must be checked **per component**: a
 /// pooled test would let an error in one component be masked by another.
-pub fn compensator_at_events(parameters: &Parameters, observation: &Observation) -> Vec<Vec<f64>> {
-    assert_dimensions_agree(parameters, observation);
+pub fn compensator_at_events(
+    parameters: &Parameters,
+    observation: &Observation,
+) -> Result<Vec<Vec<f64>>, Error> {
+    ensure_dimensions_agree(parameters, observation)?;
     let d = parameters.dimension();
     let beta = parameters.decay;
     let events = observation.events();
     let mut out: Vec<Vec<f64>> = events.iter().map(|c| Vec::with_capacity(c.len())).collect();
     if observation.is_empty() {
-        return out;
+        return Ok(out);
     }
 
     let mut walk = PooledWalk::new(events);
@@ -779,7 +780,7 @@ pub fn compensator_at_events(parameters: &Parameters, observation: &Observation)
         previous_time = time;
         previous_counts.copy_from_slice(&counts);
     }
-    out
+    Ok(out)
 }
 
 /// Simulates a `d`-component realization on `[0, horizon]` by Ogata's modified
@@ -999,7 +1000,7 @@ pub fn fit_from(observation: &Observation, start: Vec<f64>) -> Result<Fit, Error
         fn cost(&self, log_parameters: &Self::Param) -> Result<f64, argmin::core::Error> {
             self.objective_calls.fetch_add(1, Ordering::Relaxed);
             Ok(
-                negative_log_likelihood(&self.parameters(log_parameters), self.observation)
+                negative_log_likelihood(&self.parameters(log_parameters), self.observation)?
                     / self.scale,
             )
         }
@@ -1011,7 +1012,8 @@ pub fn fit_from(observation: &Observation, start: Vec<f64>) -> Result<Fit, Error
         fn gradient(&self, log_parameters: &Self::Param) -> Result<Vec<f64>, argmin::core::Error> {
             self.gradient_calls.fetch_add(1, Ordering::Relaxed);
             let parameters = self.parameters(log_parameters);
-            let (_, gradient) = negative_log_likelihood_and_gradient(&parameters, self.observation);
+            let (_, gradient) =
+                negative_log_likelihood_and_gradient(&parameters, self.observation)?;
             let log_gradient = gradient.to_log_parameter_space(&parameters);
             let mut flat = log_gradient.baseline;
             flat.extend_from_slice(&log_gradient.excitation);
@@ -1061,8 +1063,8 @@ pub fn fit_from(observation: &Observation, start: Vec<f64>) -> Result<Fit, Error
     let excitation: Vec<f64> = best[d..d + d * d].iter().map(|v| v.exp()).collect();
     let parameters = Parameters::new(baseline, excitation, best[d + d * d].exp())?;
 
-    let value = negative_log_likelihood(&parameters, observation);
-    let (_, gradient) = negative_log_likelihood_and_gradient(&parameters, observation);
+    let value = negative_log_likelihood(&parameters, observation)?;
+    let (_, gradient) = negative_log_likelihood_and_gradient(&parameters, observation)?;
     let log_gradient = gradient.to_log_parameter_space(&parameters);
     let events = total_events as f64;
     let gradient_norm = log_gradient
@@ -1122,8 +1124,11 @@ pub fn fit_from(observation: &Observation, start: Vec<f64>) -> Result<Fit, Error
 /// would actually pay, but `hawk` has no multi-realization API and CLAUDE.md §5
 /// forbids building one ahead of a caller.
 #[cfg(feature = "rayon")]
-pub fn negative_log_likelihood_parallel(parameters: &Parameters, observation: &Observation) -> f64 {
-    assert_dimensions_agree(parameters, observation);
+pub fn negative_log_likelihood_parallel(
+    parameters: &Parameters,
+    observation: &Observation,
+) -> Result<f64, Error> {
+    ensure_dimensions_agree(parameters, observation)?;
     use rayon::prelude::*;
 
     let d = parameters.dimension();
@@ -1135,7 +1140,7 @@ pub fn negative_log_likelihood_parallel(parameters: &Parameters, observation: &O
         total += parameters.baseline[i] * horizon;
     }
     if observation.is_empty() {
-        return total;
+        return Ok(total);
     }
 
     let mut walk = PooledWalk::new(observation.events());
@@ -1203,5 +1208,5 @@ pub fn negative_log_likelihood_parallel(parameters: &Parameters, observation: &O
     for part in &log_term_parts {
         log_term += part;
     }
-    total - log_term
+    Ok(total - log_term)
 }

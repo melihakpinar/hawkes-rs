@@ -168,7 +168,8 @@ fn differential_against_tick() {
             )
             .unwrap_or_else(|e| panic!("{}: {e}", fixture.name));
 
-            let hawk_nll = multivariate::negative_log_likelihood(&parameters, &observation);
+            let hawk_nll =
+                multivariate::negative_log_likelihood(&parameters, &observation).unwrap();
             // OQ-8: tick's loss is the negative log-likelihood ratio against a
             // unit-rate Poisson, divided by n_jumps. Undoing both gives the plain
             // negative log-likelihood. `D` is the number of components.
@@ -255,7 +256,8 @@ fn univariate_path_agrees_on_the_univariate_fixtures() {
             )
             .unwrap();
             let multivariate_value =
-                multivariate::negative_log_likelihood(&multi_parameters, &multi_observation);
+                multivariate::negative_log_likelihood(&multi_parameters, &multi_observation)
+                    .unwrap();
 
             assert_eq!(
                 univariate_value.to_bits(),

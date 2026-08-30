@@ -203,10 +203,14 @@ def test_no_panic_reaches_the_interpreter() -> None:
 def test_a_dimension_mismatch_between_parameters_and_events_raises() -> None:
     """Step 6: no panic reaches the interpreter.
 
-    The Rust side treats a mismatched pair as a programming error and panics; from
-    Python it is ordinary invalid input, so the bindings check first. Before that check
-    existed, one direction silently returned a number and the other surfaced as
+    Both halves of the pair come from the caller, so a mismatch is invalid input and
+    the Rust side returns an error the bindings map to ``ValueError``. Before it was
+    checked at all, one direction silently returned a number and the other surfaced as
     ``pyo3_runtime.PanicException``.
+
+    The bindings used to re-test this at the boundary because the Rust side panicked.
+    That shim is gone; what this asserts is now produced by ``hawk`` itself, so it also
+    covers a Rust caller.
     """
     events_2 = [np.array([1.0]), np.array([2.0])]
     events_3 = [np.array([1.0]), np.array([2.0]), np.array([3.0])]
