@@ -1184,3 +1184,48 @@ five times:
 
 That last point is the reason the corpus scan exists. Restoring the feature returns all
 five to green.
+
+## S49 — the Python fixture-parity oracle
+
+`hawk-python/tests/test_fixture_parity.py` was the one oracle in the repository with no
+sabotage on record. Every Rust test file carried one; this file did not, which made the
+README's claim that *every* oracle had been shown to go red an overstatement rather than
+a fact. It is now a fact.
+
+Two mutations, both in `hawk-python/src/lib.rs`, chosen so each is caught by exactly one
+of the file's two tests.
+
+### Transposing the excitation matrix at the boundary
+
+`matrix_from` reads `view[[j, i]]` instead of `view[[i, j]]`.
+
+`test_oq8_identity_holds_through_the_bindings` goes red on `bivariate_asymmetric`:
+hawk 833.137280423698 against tick's 701.3137302959004, a difference of 131.8 where the
+gate is `1e-9 * 761.5 = 7.6e-7`.
+
+**The whole Rust suite stays green — 22 targets, zero failures.** No Rust test passes
+through `matrix_from`; Rust callers hand `multivariate::Parameters` a `Vec` directly.
+The file's docstring claims "a comparison that fails here and passes in Rust is a
+finding about the bindings", and this is that sentence measured rather than asserted.
+
+It is also the CLAUDE.md §1.3 transposition hazard in its natural habitat: a fitted
+matrix that "looks plausible and is wrong". The symmetric fixtures cannot see it, and
+`test_univariate_and_multivariate_agree_bitwise_through_the_bindings` cannot either — a
+1x1 matrix is its own transpose.
+
+### Advancing the horizon by one ulp
+
+`Observation::new(&owned, horizon.next_up())` in `univariate_negative_log_likelihood`
+only, so the univariate and multivariate paths see different horizons.
+
+`test_univariate_and_multivariate_agree_bitwise_through_the_bindings` goes red at 2 ulp
+(`bits(1386.1425455415917)` against `bits(1386.1425455415913)`). The identity test above
+stays **green**: one ulp of horizon moves the value about fifteen orders of magnitude
+below its `1e-9 * scale` gate.
+
+### Why two
+
+Each test catches what the other cannot, and a single mutation would have left one of
+them looking redundant. This is the §3 rule about widening the case set, applied before
+the fact instead of after: a tolerance gate and a bitwise gate answer different
+questions, and the sabotage has to be able to tell them apart.
