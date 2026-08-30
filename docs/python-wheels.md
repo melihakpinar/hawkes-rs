@@ -34,12 +34,12 @@ The import location is asserted by the test run, not eyeballed: if anything reso
 
 `.github/workflows/wheels.yml` builds:
 
-| OS | Runner | Architecture | Wheel imported on the runner |
+| OS | Runner | Architecture | Loaded by an interpreter |
 | --- | --- | --- | --- |
 | Linux | `ubuntu-latest` | `x86_64` (manylinux) | yes |
 | Linux | `ubuntu-24.04-arm` | `aarch64` (manylinux) | yes |
 | macOS | `macos-14` | `arm64` | yes |
-| macOS | `macos-14` | `x86_64` (cross-built, macOS 10.12+) | **no** |
+| macOS | `macos-14` | `x86_64` (cross-built, macOS 10.12+) | **no — built, not verified** |
 | Windows | `windows-latest` | `AMD64` | yes |
 
 and then installs the Linux `x86_64` wheel into CPython 3.9, 3.10, 3.11, 3.12 and 3.13,
@@ -66,7 +66,7 @@ job had not been testing what it said:
   name should not be satisfiable from PyPI. It is not meant to block a declared runtime
   dependency, which a real user does fetch from an index.
 
-### macOS `x86_64` is built but not executed
+### macOS `x86_64` is built, not verified
 
 Its floor is macOS 10.12 rather than the 10.9 the cp39 tag defaults to, because
 that is Rust's minimum for `x86_64-apple-darwin`. `delocate` refuses to ship the
@@ -74,7 +74,8 @@ mismatch, which is the right call — a 10.9 tag would promise an OS the binary
 cannot load on — so the tag states the real floor.
 
 It is cross-built on the arm64 runner and its test step is skipped, so it is a real
-artifact that has never been loaded by an interpreter.
+artifact that has never been loaded by an interpreter. The README uses the same phrase
+for the same row, so the two files cannot drift into disagreeing about it.
 
 The Intel runner it used to be built on, `macos-13`, is retired. That was not obvious
 from the outside: a job targeting it sat **queued for 15 hours 49 minutes without ever
