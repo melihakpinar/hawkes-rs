@@ -880,6 +880,154 @@ bits. It now walks both fixtures and names each differing leaf with both values 
 `tick_loss` locally and confirming both are named — *before* the cause was known, and it
 stays whether or not it is needed again.
 
+---
+
+# M3: the Python boundary
+
+## Harness 21 — bitwise equality across the boundary (step 3)
+
+`hawk-python/tests/test_bit_identity.py`. The Python bindings must return **bit for
+bit** what Rust computes, compared against `tests/fixtures/rust-nll.json`, which
+`hawk/tests/rust_nll_manifest.rs` fails on if it goes stale.
+
+### What it found, on the first run
+
+**Thirteen of forty-four points disagreed by one to two ulps** — and the cause was not
+in the bindings.
+
+Ruling that out took three measurements rather than a guess:
+
+1. Optimization level. Rebuilding the extension with `--release` changed nothing, and
+   the Rust example (opt-level 0) already agreed with the Rust test (opt-level 2).
+2. A minimal reproduction. Hand-built `d = 2` cases with three to five events matched
+   bitwise, so the code path was not at fault. The disagreement was size-dependent.
+3. The inputs. Dumping every element's bit pattern from both sides and diffing showed
+   the *events themselves* differing:
+   `e0_6` was `0x4029fc0f1abad071` in Rust and `0x4029fc0f1abad070` in Python.
+
+The fixture literal is `12.992302737526387`. Comparing both candidate doubles against
+the exact decimal: Python's is `9.08e-17` away, Rust's `1.87e-15`. **`serde_json`'s
+default float parsing is not correctly rounded**, and CPython's is.
+
+So every Rust test that reads the corpus had been computing on events up to one ulp
+away from the ones `tick` actually simulated. `serde_json`'s `float_roundtrip` feature
+fixes it, and with it enabled all 44 points agree bitwise.
+
+### Why nothing caught it for three milestones
+
+The `tick` differential compares to `1e-9` relative — seven orders of magnitude above
+one ulp. Every other fixture consumer is looser still. Nothing in the repository
+compared a fixture-derived value to anything at full precision until M3 required two
+independent readers of the same file to agree exactly.
+
+That is the argument for step 3 being bitwise rather than tolerant, made by the thing
+itself: a tolerance-based parity test would have passed on the first run and the corpus
+would still be being misread.
+
+`hawk/tests/fixture_parsing.rs` pins it, with the three literals and their correctly
+rounded doubles.
+
+### S46 — remove `float_roundtrip`
+
+**RED** on `fixture_parsing.rs`, naming the literal and both bit patterns.
+
+### The f32 round trip, made permanent rather than performed once
+
+Step 3 asks for an `f32` round trip to be inserted and the test confirmed red.
+`test_a_float32_round_trip_would_be_caught` asserts it on every run instead, and the
+condition is data-driven: a round trip only degrades a timestamp that is not exactly
+representable in `float32`, and the four hand-built tied fixtures use values like `1.0`
+and `2.5` that survive it. For those, nothing changing is correct; for every fixture
+whose timestamps *do* change, the likelihood must change too.
+
+A fixed count would have been wrong twice over — the first draft asserted 30 of 44 and
+28 changed.
+
+## Harness 22 — the input contract and error mapping at the boundary (steps 4, 6)
+
+`hawk-python/tests/test_input_contract.py`. Each test names the `conventions.md` C8
+rule it enforces, so the boundary can neither widen nor narrow the contract.
+
+### What step 6 found
+
+`test_no_panic_reaches_the_interpreter` failed on its first run, on a mismatch between
+the parameters' dimension and the number of event components. Both directions were
+broken, in **Rust**, not in the bindings:
+
+- `d = 3` parameters with two components of events **silently returned a number**
+  (`8.324167375093932`). The missing component was treated as empty.
+- `d = 2` parameters with three components read past the end of the counts array:
+  `index out of bounds: the len is 2 but the index is 2`, surfacing in Python as
+  `pyo3_runtime.PanicException`.
+
+`assert_dimensions_agree` now guards all four evaluation entry points, and the bindings
+check first so a Python caller gets `ValueError` rather than a panic — which is what
+step 6 asks for. `multivariate_loglikelihood.rs` has a `#[should_panic]` test for each
+direction.
+
+Nothing in the Rust suite had exercised a mismatched pair, because every Rust caller
+constructs both from the same fixture. It took a binding whose caller can pass anything.
+
+## Harness 23 — the array policy (step 5)
+
+`hawk-python/tests/test_array_handling.py`, one test per section of
+`docs/python-array-handling.md`, written after the document and before the behaviour was
+settled.
+
+The load-bearing one is `test_a_fortran_ordered_excitation_matrix_is_not_transposed`.
+Reading an F-ordered array by stride rather than by index delivers **the transpose** —
+the exact failure C6 exists to prevent, undetectable on symmetric input. The test uses
+an asymmetric matrix and asserts both halves: that C order and F order agree, and that
+the transpose *disagrees*, so it cannot pass vacuously on a matrix too close to
+symmetric.
+
+### A promise that was wrong, and was corrected rather than asserted around
+
+`python-array-handling.md` §6 originally promised returned arrays "owning their own
+memory", and the test asserted `OWNDATA`. That failed: an array handed over from a Rust
+`Vec` is adopted by numpy through a base object, so `OWNDATA` is `False` while the
+memory is still numpy's and the `Vec` is gone.
+
+The matrix getters were changed to build genuinely owned arrays, which is worth doing.
+But `simulate` legitimately hands over a `Vec`, and forcing a copy to make a flag true
+would be waste. §6 now promises the behaviour a caller can rely on — writable, mutating
+it changes nothing else, lifetime independent of any Rust value — and says explicitly
+that `OWNDATA` is not the way to check it. The test asserts the behaviour.
+
+## `hawk` is not bit-reproducible across platforms, and now says so
+
+The bit-identity reference was committed at first. CI failed on it: the manifest
+generated on macOS aarch64 recorded `0x4086d455b0fc6646` for one point and Linux
+x86_64 computed `0x4086d455b0fc6645`.
+
+**FMA contraction was the obvious suspect and it is wrong.** `rustc -O` on aarch64
+emits separate `fmul` and `fadd` for `acc + a * b`, not `fmadd` — checked by reading
+the emitted assembly rather than assuming. (The two forms *do* differ: of 200 000
+random triples, 24 192 give different results fused versus separate. That is why the
+hypothesis was plausible and why it needed checking rather than accepting.)
+
+What remains is deductive. IEEE-754 requires `+`, `-`, `*` and `/` to be correctly
+rounded, so those are identical on every conforming platform. It requires nothing of
+the sort for `exp`, `ln` and `exp_m1`, which come from the platform's libm — and this
+computation is built from them. Apple's libm and glibc's differ in the last bits.
+
+So the difference is not architecture as such; it is the C library. Two Linux machines
+with the same glibc agree.
+
+### What follows
+
+- **The reference is generated per machine**, into `target/`, and is not committed. A
+  committed one would assert a cross-platform reproducibility that does not hold.
+- **The bitwise test is unaffected.** It asks whether the *boundary* changes a number,
+  which is a same-machine question. A stale or foreign reference fails it loudly rather
+  than passing quietly, which is the safe direction.
+- **Nothing else in the repository relied on cross-platform bit equality.** The `tick`
+  differential compares at `1e-9` relative and the fixtures store `tick`'s values, not
+  `hawk`'s. This is the first thing that asked the question, and the answer is no.
+
+`hawk/tests/rust_nll_manifest.rs`, which existed to keep the committed reference
+current, is deleted: with generation at test time there is no staleness to guard.
+
 ## Summary
 
 | ID | Harness | What was broken | Result |
@@ -930,6 +1078,7 @@ stays whether or not it is needed again.
 | S43 | parallel path | per-component parts combined in reverse order | RED on the randomized case, by one ulp; fixed shapes stayed green |
 | S44 | spectral radius | bracket midpoint instead of the upper bound | RED on the reducible cases, GREEN on irreducible |
 | S45 | spectral radius | "upper bound stopped moving" early exit restored | RED on the defective cases alone |
+| S46 | fixture parsing | `serde_json`'s `float_roundtrip` feature removed | RED, naming the literal and both bit patterns |
 
 Every harness has been observed both red and green. The working tree after all
 sabotages is byte-identical to before them.
@@ -942,3 +1091,34 @@ Two of CLAUDE.md §3's five oracles do not exist yet and are not claimed here:
 2. **Time-rescaling / Ogata residuals** — needs a simulator and a compensator. M1.
 
 The three that do exist are the three that can be built without algorithm code.
+
+## The wheel workflow, and three things it caught by failing
+
+M3 steps 8–10. Recorded because in each case the workflow was *green-adjacent* —
+either passing on a technicality or not running at all — and the failure is what
+turned an assumption into a measurement.
+
+**A retired runner is indistinguishable from a slow one.** The `macos-13` leg sat
+queued 15h49m without starting, while every other leg started within 6 seconds. Nothing
+failed; the workflow simply never finished, and because `clean-install` declares
+`needs: [build]`, steps 9 and 10 had **never executed** while the PR looked merely slow.
+The lesson generalises past CI: a verification that is pending forever reports the same
+thing as one that was never written, and neither shows up as red.
+
+**The clean-install guard caught its own environment.** `ubuntu-latest` ships a
+preinstalled Rust toolchain, so the job asserting "the wheel needs no Rust toolchain"
+was running in an environment that had one. The guard (`fail if cargo is on PATH`) is
+the only reason this is known. Had the job been written without it — installing the
+wheel and running pytest, which would have passed — the claim would have been false and
+green. This is the §3 sabotage principle arriving from the other direction: the guard
+went red on its first real run, which is exactly the evidence that it is an oracle.
+
+**A cross-built wheel is not a tested wheel.** macOS `x86_64` is now cross-built on the
+arm64 runner and never loaded by an interpreter. `docs/python-wheels.md` carries a
+column stating which platforms were imported on the runner and which were not, because
+the table would otherwise imply five tested platforms when four is the honest number.
+
+`delocate` refused the first cross-built wheel: Rust's `x86_64-apple-darwin` floor is
+10.12 while the cp39 tag defaults to 10.9. That refusal is a correctly-working check —
+the tag would have promised an OS the binary cannot load on — and the fix was to state
+the real floor, not to silence it.

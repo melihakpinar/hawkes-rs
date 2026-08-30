@@ -1,0 +1,186 @@
+name: wheels
+
+# The matrix is verified by building, not by assuming. Whatever this workflow is green
+# on is what `docs/python-wheels.md` is allowed to claim.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.os }} / ${{ matrix.archs }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            archs: x86_64
+          - os: ubuntu-24.04-arm
+            archs: aarch64
+          # macOS x86_64 is cross-built on the arm64 runner. The `macos-13` Intel
+          # runner is retired: a job targeting it sat queued for 15h49m without
+          # starting, while every other leg started within 6 seconds, and because
+          # `clean-install` needs `build` the whole workflow could never finish.
+          #
+          # The wheel is built but NOT executed there, and `docs/python-wheels.md`
+          # says so rather than implying it was tested. That is the same standard
+          # Windows-on-ARM is held to; the difference is that Intel Macs are common
+          # enough that shipping an unexecuted wheel beats shipping none.
+          - os: macos-14
+            archs: x86_64
+            test_skip: "*_x86_64"
+            # Rust's x86_64-apple-darwin has a minimum deployment target of 10.12,
+            # while the cp39 wheel tag defaults to 10.9. delocate refuses the
+            # mismatch, correctly: the tag would have promised an OS the binary
+            # cannot load on. 10.12 is the true floor, so the tag says 10.12.
+            deployment_target: "10.12"
+          - os: macos-14
+            archs: arm64
+            # Every macOS leg must set this. Left unset, the env key is still
+            # present but empty, and cibuildwheel fails parsing it as a version.
+            # 11.0 is Rust's minimum for aarch64-apple-darwin and is what the tag
+            # already said, so this pins the existing floor rather than moving it.
+            deployment_target: "11.0"
+          - os: windows-latest
+            archs: AMD64
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # The abi3 wheel is built once per platform against the oldest supported
+      # interpreter and loaded by every later one, so the matrix is over platforms
+      # rather than over CPython versions. Which interpreters actually load it is
+      # checked below rather than inferred from the tag.
+      # The arm64 runner's toolchain carries only its own std, so the cross-built
+      # wheel fails with "can't find crate for `core`" until this target is added.
+      # maturin picks the triple up from the ARCHFLAGS cibuildwheel sets.
+      - name: Add the macOS x86_64 target
+        if: matrix.archs == 'x86_64' && startsWith(matrix.os, 'macos')
+        run: rustup target add x86_64-apple-darwin
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v3.2.0
+        with:
+          package-dir: hawk-python
+        env:
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment_target }}
+          CIBW_BUILD: cp39-*
+          CIBW_ARCHS: ${{ matrix.archs }}
+          CIBW_SKIP: "*-musllinux_*"
+          CIBW_BEFORE_ALL_LINUX: >
+            curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+          CIBW_ENVIRONMENT_LINUX: 'PATH="$HOME/.cargo/bin:$PATH"'
+          CIBW_TEST_COMMAND: python -c "import hawk; print(hawk.__version__)"
+          CIBW_TEST_SKIP: ${{ matrix.test_skip }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}-${{ matrix.archs }}
+          path: wheelhouse/*.whl
+
+  # The Rust-side reference the bit-identity test compares against. It is generated
+  # here rather than committed because the values are platform-dependent: `exp`, `ln`
+  # and `exp_m1` are not correctly rounded and differ between libm implementations.
+  # This job runs on the same OS and architecture as `clean-install`, which is what
+  # makes the comparison meaningful; `clean-install` itself has no Rust toolchain.
+  manifest:
+    name: rust reference (linux x86_64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: cargo run --example dump_fixture_nll target/rust-nll.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-nll-linux-x86_64
+          path: target/rust-nll.json
+
+  # Step 9 and 10: the wheel installs and passes in an environment with no Rust
+  # toolchain and no source tree, and pytest runs against the installed package.
+  clean-install:
+    name: clean install, CPython ${{ matrix.python }}
+    needs: [build, manifest]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheels-ubuntu-latest-x86_64
+          path: wheelhouse
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: rust-nll-linux-x86_64
+          path: reference
+
+      # No source tree: the tests and the fixture corpus are copied out, and the Rust
+      # sources and Cargo manifests are left behind. If anything still resolved
+      # `hawk` from the working directory rather than from the wheel, this would be
+      # where it showed.
+      - name: Stage tests and fixtures without the sources
+        run: |
+          mkdir -p /tmp/clean/tests
+          cp -r hawk-python/tests /tmp/clean/
+          cp -r tests/fixtures /tmp/clean/fixtures
+          ls /tmp/clean
+
+      # ubuntu-latest ships a preinstalled Rust toolchain, so this job was not
+      # testing what it claimed to until the guard below failed and said so. The
+      # toolchain is removed rather than the guard relaxed: the guard is the only
+      # thing standing between "the wheel is self-contained" and "we never checked".
+      - name: Remove the preinstalled Rust toolchain
+        run: |
+          rustup self uninstall -y || true
+          sudo rm -rf "${CARGO_HOME:-$HOME/.cargo}" "${RUSTUP_HOME:-$HOME/.rustup}" \
+            /usr/share/rust /usr/local/cargo ~/.cargo ~/.rustup
+          hash -r
+
+      - name: Confirm there is no Rust toolchain
+        run: |
+          if command -v cargo >/dev/null 2>&1; then
+            echo "cargo is present; this job is supposed to prove the wheel needs no toolchain" >&2
+            exit 1
+          fi
+          echo "no cargo on PATH"
+
+      - name: Install the wheel
+        run: |
+          python -m pip install --upgrade pip
+          # numpy is a real runtime dependency and comes from PyPI as a user's
+          # would. `--no-index` below scopes only where `hawk-hawkes` itself may
+          # come from -- it is not published anywhere, so without the flag a typo
+          # in the wheel name could be satisfied by something else entirely.
+          python -m pip install pytest numpy
+          python -m pip install --no-index --find-links wheelhouse hawk-hawkes
+
+      - name: The imported package is the installed one, not the working tree
+        working-directory: /tmp/clean
+        run: |
+          python - <<'PY'
+          import hawk, pathlib, sys
+          location = pathlib.Path(hawk.__file__).resolve()
+          print("hawk imported from", location)
+          assert "site-packages" in str(location), location
+          print("version", hawk.__version__)
+          PY
+
+      - name: pytest against the installed wheel
+        working-directory: /tmp/clean
+        env:
+          HAWK_FIXTURES: /tmp/clean/fixtures
+          HAWK_RUST_NLL: ${{ github.workspace }}/reference/rust-nll.json
+        run: python -m pytest tests -q

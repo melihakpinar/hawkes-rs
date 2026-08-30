@@ -103,6 +103,10 @@ fn load_fixtures() -> Vec<Fixture> {
     let mut paths: Vec<PathBuf> = entries
         .map(|entry| entry.expect("cannot read fixture directory entry").path())
         .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
+        // `rust-nll.json` is a manifest of values hawk computes, not a fixture; it is
+        // kept current by `rust_nll_manifest.rs` and consumed by the Python bindings'
+        // bit-identity test.
+        .filter(|path| path.file_name().is_some_and(|name| name != "rust-nll.json"))
         .collect();
     // Sorted so failures are reported in a stable order across platforms.
     paths.sort();

@@ -13,7 +13,12 @@ authors = ["Mesut Melih Akpinar <mesutmelihakpinar@gmail.com>"]
 [workspace.dependencies]
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# `float_roundtrip` is not optional here. Without it serde_json's fast float path is
+# not correctly rounded and parses some of the fixture literals one ulp away from the
+# nearest double -- so Rust would be computing on events that differ from the ones tick
+# simulated. Found by M3's bit-identity test, which compared a value computed from
+# serde_json's parse against one computed from CPython's (correctly rounded) parse.
+serde_json = { version = "1", features = ["float_roundtrip"] }
 proptest = "1"
 rayon = "1"
 rand = "0.9"

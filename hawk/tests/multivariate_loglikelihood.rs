@@ -275,3 +275,32 @@ proptest! {
         );
     }
 }
+
+/// A `Parameters` and an `Observation` that describe different processes must not be
+/// evaluated together.
+///
+/// Before this check existed, `d = 3` parameters with two components of events
+/// **silently returned a number** — the missing component was treated as empty — and
+/// the other direction read past the end of the counts array and panicked with `index
+/// out of bounds`. Both were found by the Python bindings' error-mapping test, which
+/// requires that no panic reach the interpreter.
+///
+/// The Rust side treats this as a documented invariant of the pair and panics
+/// (CLAUDE.md §5); `hawk-python` checks first and raises `ValueError`.
+#[test]
+#[should_panic(expected = "they must agree")]
+fn too_few_event_components_is_not_silently_accepted() {
+    let p = parameters(vec![0.4, 0.4, 0.4], vec![0.1; 9], 1.0);
+    let events = vec![vec![1.0], vec![2.0]];
+    let observation = Observation::new(&events, 5.0).unwrap();
+    negative_log_likelihood(&p, &observation);
+}
+
+#[test]
+#[should_panic(expected = "they must agree")]
+fn too_many_event_components_is_not_an_out_of_bounds_read() {
+    let p = parameters(vec![0.4, 0.4], vec![0.1; 4], 1.0);
+    let events = vec![vec![1.0], vec![2.0], vec![3.0]];
+    let observation = Observation::new(&events, 5.0).unwrap();
+    negative_log_likelihood(&p, &observation);
+}
