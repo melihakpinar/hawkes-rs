@@ -436,7 +436,8 @@ pub fn multivariate_asymptotic_standard_errors(
             point[d + d * d],
         )
         .expect("valid parameters");
-        let (_, g) = hawk::multivariate::negative_log_likelihood_and_gradient(&p, observation);
+        let (_, g) =
+            hawk::multivariate::negative_log_likelihood_and_gradient(&p, observation).unwrap();
         let mut flat = g.baseline;
         flat.extend_from_slice(&g.excitation);
         flat.push(g.decay);

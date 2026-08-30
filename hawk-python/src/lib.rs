@@ -38,6 +38,7 @@ fn to_py_error(error: Error) -> PyErr {
         | Error::InsufficientData { .. }
         | Error::EmptyProcess
         | Error::DimensionMismatch { .. }
+        | Error::ProcessDimensionMismatch { .. }
         | Error::InvalidExcitation { .. } => PyValueError::new_err(message),
         // The optimizer failed as a solver, not because the input was invalid.
         Error::OptimizerFailed { .. } => PyRuntimeError::new_err(message),
@@ -384,24 +385,6 @@ fn events_from(events: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<f64>>> {
     Ok(out)
 }
 
-/// Rejects a mismatch between the parameters' dimension and the number of event
-/// components, before Rust can assert on it.
-///
-/// The Rust side treats this as a programming error and panics (a documented invariant
-/// of the pair). From Python it is ordinary invalid input, and a panic crossing the FFI
-/// boundary is exactly what M3 step 6 forbids, so the bindings check first.
-fn check_dimensions(parameters: &MultivariateParameters, events: &[Vec<f64>]) -> PyResult<()> {
-    if parameters.inner.dimension() != events.len() {
-        return Err(PyValueError::new_err(format!(
-            "parameters describe a {}-component process but {} components of events \
-             were given; they must agree",
-            parameters.inner.dimension(),
-            events.len()
-        )));
-    }
-    Ok(())
-}
-
 #[pyfunction]
 #[pyo3(name = "multivariate_negative_log_likelihood")]
 fn multivariate_negative_log_likelihood(
@@ -410,12 +393,9 @@ fn multivariate_negative_log_likelihood(
     horizon: f64,
 ) -> PyResult<f64> {
     let owned = events_from(events)?;
-    check_dimensions(parameters, &owned)?;
     let observation = hawk::multivariate::Observation::new(&owned, horizon).map_err(to_py_error)?;
-    Ok(hawk::multivariate::negative_log_likelihood(
-        &parameters.inner,
-        &observation,
-    ))
+    hawk::multivariate::negative_log_likelihood(&parameters.inner, &observation)
+        .map_err(to_py_error)
 }
 
 /// `(value, d/d baseline, d/d excitation, d/d decay)` — the fields of the Rust
@@ -436,10 +416,10 @@ fn multivariate_negative_log_likelihood_and_gradient<'py>(
     horizon: f64,
 ) -> PyResult<MultivariateGradientTuple<'py>> {
     let owned = events_from(events)?;
-    check_dimensions(parameters, &owned)?;
     let observation = hawk::multivariate::Observation::new(&owned, horizon).map_err(to_py_error)?;
     let (value, gradient) =
-        hawk::multivariate::negative_log_likelihood_and_gradient(&parameters.inner, &observation);
+        hawk::multivariate::negative_log_likelihood_and_gradient(&parameters.inner, &observation)
+            .map_err(to_py_error)?;
     let d = parameters.inner.dimension();
     let rows: Vec<Vec<f64>> = (0..d)
         .map(|i| gradient.excitation[i * d..(i + 1) * d].to_vec())
@@ -462,10 +442,10 @@ fn multivariate_compensator_at_events<'py>(
     horizon: f64,
 ) -> PyResult<Vec<Bound<'py, PyArray1<f64>>>> {
     let owned = events_from(events)?;
-    check_dimensions(parameters, &owned)?;
     let observation = hawk::multivariate::Observation::new(&owned, horizon).map_err(to_py_error)?;
     Ok(
         hawk::multivariate::compensator_at_events(&parameters.inner, &observation)
+            .map_err(to_py_error)?
             .into_iter()
             .map(|component| PyArray1::from_vec(py, component))
             .collect(),

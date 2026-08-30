@@ -1123,6 +1123,28 @@ the table would otherwise imply five tested platforms when four is the honest nu
 the tag would have promised an OS the binary cannot load on — and the fix was to state
 the real floor, not to silence it.
 
+## S47 — the multivariate dimension guard, as an error rather than a panic
+
+The guard that stops a `Parameters` and an `Observation` describing different processes
+was an `assert!`. It is now `Error::ProcessDimensionMismatch`, per CLAUDE.md §5: both
+halves come from the caller, so a mismatch is invalid input and not a violated internal
+invariant.
+
+Sabotage, three parts, all in `hawk/tests/multivariate_loglikelihood.rs`:
+
+| Removed | Test | Result |
+| --- | --- | --- |
+| the guard in `negative_log_likelihood` | `too_few_event_components_is_not_silently_accepted` | red — returns `Ok(...)`, the original silent-wrong-number defect |
+| the same | `too_many_event_components_is_not_an_out_of_bounds_read` | red — `index out of bounds` at `multivariate.rs:448`, the original panic |
+| the guards in `negative_log_likelihood_and_gradient` and `compensator_at_events` | `every_multivariate_entry_point_rejects_a_mismatch` | red |
+
+The first two reproduce the two original defects exactly, which is the useful part:
+the sabotage does not merely fail, it fails *as the historical bug*.
+
+The Python boundary shim `check_dimensions` is deleted. It existed only because the
+Rust side panicked, and `test_a_dimension_mismatch_between_parameters_and_events_raises`
+stays green through the Rust error instead — the same check now serves both languages,
+so they cannot drift into disagreeing about what a mismatch is.
 ## S48 — the fixture loader's float round-trip, guarded permanently
 
 The `serde_json` defect (13 of 44 evaluation points read one ulp away from the values

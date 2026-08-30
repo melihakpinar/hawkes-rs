@@ -119,7 +119,7 @@ fn time_rescaled_residuals_are_unit_exponential_per_component() {
             let mut rng = ChaCha8Rng::seed_from_u64(*seed);
             let events = simulate(&parameters, horizon, &mut rng).unwrap();
             let observation = Observation::new(&events, horizon).unwrap();
-            let compensators = compensator_at_events(&parameters, &observation);
+            let compensators = compensator_at_events(&parameters, &observation).unwrap();
 
             for (component, values) in compensators.iter().enumerate() {
                 assert!(
@@ -166,7 +166,7 @@ fn the_ks_test_rejects_residuals_from_a_transposed_matrix() {
         }
     }
     let wrong = Parameters::new(truth.baseline().to_vec(), transposed, truth.decay()).unwrap();
-    let compensators = compensator_at_events(&wrong, &observation);
+    let compensators = compensator_at_events(&wrong, &observation).unwrap();
 
     let mut any_rejected = false;
     for values in &compensators {
@@ -261,7 +261,11 @@ fn simulated_realizations_satisfy_the_input_contract() {
         // A finite likelihood is a cheap end-to-end check that the realization is
         // consistent with the parameters that produced it.
         let observation = Observation::new(&events, 500.0).unwrap();
-        assert!(negative_log_likelihood(&parameters, &observation).is_finite());
+        assert!(
+            negative_log_likelihood(&parameters, &observation)
+                .unwrap()
+                .is_finite()
+        );
     }
 }
 

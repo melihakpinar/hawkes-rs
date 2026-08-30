@@ -6,8 +6,9 @@ with Python bindings.
 > ## Pre-alpha
 >
 > The exponential-kernel process works in one and `d` dimensions: simulation,
-> log-likelihood, analytic gradient and maximum-likelihood fitting. **There are no
-> Python bindings yet** and the API will change. Do not depend on this crate.
+> log-likelihood, analytic gradient and maximum-likelihood fitting, from Rust and from
+> Python. Nothing is published to crates.io or PyPI, and the API will change. Do not
+> depend on this crate.
 >
 > Every formula traces to an approved derivation, and every oracle has been shown to
 > go red on deliberately broken code — see
@@ -30,7 +31,7 @@ written. The rules are in [`CLAUDE.md`](CLAUDE.md).
 | M0 | Verification infrastructure: pinned `tick` oracle, reference fixtures, differential / property / gradient harnesses, sabotage evidence | complete |
 | M1 | Univariate exponential-kernel likelihood, gradient, simulator, MLE | complete |
 | M2 | Multivariate with cross-excitation | complete |
-| M3 | Python wheels | not started |
+| M3 | Python bindings and wheels | complete |
 | M4 | Benchmarks against `tick` | partial — see `docs/positioning-probe.md` |
 
 v0.1.0 is univariate and multivariate exponential-kernel Hawkes: simulation, MLE,
@@ -40,8 +41,8 @@ estimation, regularization, marked and spatial processes are explicitly out of s
 ## Layout
 
 ```
-hawk/               Rust core crate (no algorithms yet)
-hawk-python/        PyO3 bindings (placeholder until M1)
+hawk/               Rust core crate
+hawk-python/        PyO3 bindings, maturin
 docs/
   derivations/      approved derivations; conventions.md pins the index conventions
   references/       papers (not committed)
@@ -50,6 +51,34 @@ docs/
 benchmarks/docker/  pinned tick environment and the fixture generator
 tests/fixtures/     committed reference data from tick
 ```
+
+## Python wheels
+
+`abi3`, built once per platform against CPython 3.9 and loaded by every later
+interpreter. What follows is what a workflow was **observed** to do, not what its
+matrix declares:
+
+| Platform | Wheel built | Loaded by an interpreter |
+| --- | --- | --- |
+| Linux `x86_64` (manylinux) | yes | yes |
+| Linux `aarch64` (manylinux) | yes | yes |
+| macOS `arm64` | yes | yes |
+| macOS `x86_64` | yes | **no — built, not verified** |
+| Windows `AMD64` | yes | yes |
+
+The Linux `x86_64` wheel is additionally installed into CPython 3.9, 3.10, 3.11, 3.12
+and 3.13 in an environment with no Rust toolchain and no source tree, and the full
+suite is run against it there.
+
+**macOS `x86_64` is built, not verified.** It is cross-compiled on the arm64 runner and
+no interpreter has ever loaded it, because GitHub's Intel macOS runner is retired — a
+job targeting it sat queued for 15 hours 49 minutes without starting while every other
+leg started within 6 seconds. It ships anyway because Intel Macs are common enough that
+an untested wheel beats none, and it is labelled here rather than left to be assumed
+working. Its floor is macOS 10.12, which is Rust's minimum for that target.
+
+musllinux, Windows on ARM and PyPy are not built at all. Details and the reasoning are
+in [`docs/python-wheels.md`](docs/python-wheels.md).
 
 ## Verification
 

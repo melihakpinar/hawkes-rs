@@ -38,8 +38,8 @@ use hawk::multivariate::{
 use proptest::prelude::*;
 
 fn assert_identical(parameters: &Parameters, observation: &Observation, context: &str) {
-    let sequential = negative_log_likelihood(parameters, observation);
-    let parallel = negative_log_likelihood_parallel(parameters, observation);
+    let sequential = negative_log_likelihood(parameters, observation).unwrap();
+    let parallel = negative_log_likelihood_parallel(parameters, observation).unwrap();
     assert_eq!(
         sequential.to_bits(),
         parallel.to_bits(),
@@ -87,9 +87,9 @@ fn agree_across_repeated_runs() {
     let p = Parameters::new(baseline, excitation, 1.1).unwrap();
     let observation = Observation::new(&events, horizon).unwrap();
 
-    let sequential = negative_log_likelihood(&p, &observation);
+    let sequential = negative_log_likelihood(&p, &observation).unwrap();
     for run in 0..25 {
-        let parallel = negative_log_likelihood_parallel(&p, &observation);
+        let parallel = negative_log_likelihood_parallel(&p, &observation).unwrap();
         assert_eq!(
             sequential.to_bits(),
             parallel.to_bits(),
@@ -128,8 +128,8 @@ proptest! {
         let p = Parameters::new(baseline, excitation, 0.1 + rng.next_f64() * 3.0).unwrap();
         let observation = Observation::new(&events, horizon).unwrap();
 
-        let sequential = negative_log_likelihood(&p, &observation);
-        let parallel = negative_log_likelihood_parallel(&p, &observation);
+        let sequential = negative_log_likelihood(&p, &observation).unwrap();
+        let parallel = negative_log_likelihood_parallel(&p, &observation).unwrap();
         prop_assert_eq!(sequential.to_bits(), parallel.to_bits(),
             "d={} sequential {:?} vs parallel {:?}", d, sequential, parallel);
     }
