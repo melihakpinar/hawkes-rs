@@ -1,0 +1,453 @@
+{
+  "benchmark": "fit_d1",
+  "methodology": "benchmarks/README.md",
+  "cell_budget_seconds": 1800,
+  "hawk": [
+    {
+      "library": "hawk",
+      "dimension": 1,
+      "seed": 20260831,
+      "warmup": 1,
+      "timed": 5,
+      "true_baseline": [
+        0.5
+      ],
+      "true_excitation": [
+        0.6
+      ],
+      "true_decay": 1.0,
+      "run": {
+        "dimension": 1,
+        "nominal_n": 1000,
+        "events": 978,
+        "horizon": 800.0,
+        "completed": true,
+        "seconds_median": 0.002496125,
+        "seconds_min": 0.001355833,
+        "seconds_max": 0.002510584,
+        "seconds_all": [
+          0.001355833,
+          0.00221575,
+          0.002496125,
+          0.002506125,
+          0.002510584
+        ],
+        "negative_log_likelihood": 625.5910461962785,
+        "iterations": 9,
+        "gradient_norm": 3.8063804217625824e-11,
+        "converged": true,
+        "objective_evaluations": 12,
+        "gradient_evaluations": 21,
+        "spectral_radius": 0.6282858577223549,
+        "baseline": [
+          0.4549023665675384
+        ],
+        "excitation": [
+          0.6282858577223548
+        ],
+        "decay": 0.9543381314663626
+      }
+    },
+    {
+      "library": "hawk",
+      "dimension": 1,
+      "seed": 20260831,
+      "warmup": 1,
+      "timed": 5,
+      "true_baseline": [
+        0.5
+      ],
+      "true_excitation": [
+        0.6
+      ],
+      "true_decay": 1.0,
+      "run": {
+        "dimension": 1,
+        "nominal_n": 10000,
+        "events": 10122,
+        "horizon": 8000.0,
+        "completed": true,
+        "seconds_median": 0.011425292,
+        "seconds_min": 0.009837167,
+        "seconds_max": 0.016419959,
+        "seconds_all": [
+          0.009837167,
+          0.010190084,
+          0.011425292,
+          0.0135645,
+          0.016419959
+        ],
+        "negative_log_likelihood": 6223.777838112934,
+        "iterations": 10,
+        "gradient_norm": 1.0473316537500077e-11,
+        "converged": true,
+        "objective_evaluations": 13,
+        "gradient_evaluations": 23,
+        "spectral_radius": 0.5961897191813461,
+        "baseline": [
+          0.510924309218852
+        ],
+        "excitation": [
+          0.5961897191813461
+        ],
+        "decay": 0.9964421028613144
+      }
+    },
+    {
+      "library": "hawk",
+      "dimension": 1,
+      "seed": 20260831,
+      "warmup": 1,
+      "timed": 5,
+      "true_baseline": [
+        0.5
+      ],
+      "true_excitation": [
+        0.6
+      ],
+      "true_decay": 1.0,
+      "run": {
+        "dimension": 1,
+        "nominal_n": 100000,
+        "events": 99718,
+        "horizon": 80000.0,
+        "completed": true,
+        "seconds_median": 0.09460425,
+        "seconds_min": 0.09450825,
+        "seconds_max": 0.096705209,
+        "seconds_all": [
+          0.09450825,
+          0.094592458,
+          0.09460425,
+          0.094754709,
+          0.096705209
+        ],
+        "negative_log_likelihood": 62179.64927267609,
+        "iterations": 10,
+        "gradient_norm": 7.467632876859146e-12,
+        "converged": true,
+        "objective_evaluations": 13,
+        "gradient_evaluations": 23,
+        "spectral_radius": 0.6026225101796352,
+        "baseline": [
+          0.4953340746801572
+        ],
+        "excitation": [
+          0.6026225101796352
+        ],
+        "decay": 1.0001673541133433
+      }
+    },
+    {
+      "library": "hawk",
+      "dimension": 1,
+      "seed": 20260831,
+      "warmup": 1,
+      "timed": 5,
+      "true_baseline": [
+        0.5
+      ],
+      "true_excitation": [
+        0.6
+      ],
+      "true_decay": 1.0,
+      "run": {
+        "dimension": 1,
+        "nominal_n": 1000000,
+        "events": 1000453,
+        "horizon": 800000.0,
+        "completed": true,
+        "seconds_median": 0.951665833,
+        "seconds_min": 0.950126541,
+        "seconds_max": 0.953501417,
+        "seconds_all": [
+          0.950126541,
+          0.950232125,
+          0.951665833,
+          0.952609125,
+          0.953501417
+        ],
+        "negative_log_likelihood": 622144.1427213566,
+        "iterations": 10,
+        "gradient_norm": 6.0022385805486816e-12,
+        "converged": true,
+        "objective_evaluations": 13,
+        "gradient_evaluations": 23,
+        "spectral_radius": 0.5996557361816897,
+        "baseline": [
+          0.5006570282694014
+        ],
+        "excitation": [
+          0.5996557361816895
+        ],
+        "decay": 1.006667328553904
+      }
+    }
+  ],
+  "tick": [
+    {
+      "runs": [
+        {
+          "dimension": 1,
+          "nominal_n": 1000,
+          "completed": true,
+          "baseline": [
+            0.4633914842208322
+          ],
+          "excitation": [
+            0.6224793370138504
+          ],
+          "decay": 1.0,
+          "events": 978,
+          "gofit": "likelihood",
+          "horizon": 800.0,
+          "negative_log_likelihood_under_hawk_objective": 625.6681901280156,
+          "seconds_all": [
+            0.0011179590073879808,
+            0.0010773329995572567,
+            0.0010207500017713755,
+            0.000989291991572827,
+            0.0009861660073511302
+          ],
+          "seconds_max": 0.0011179590073879808,
+          "seconds_median": 0.0010207500017713755,
+          "seconds_min": 0.0009861660073511302,
+          "spectral_radius": 0.6224793370138504
+        },
+        {
+          "dimension": 1,
+          "nominal_n": 1000,
+          "completed": true,
+          "baseline": [
+            0.5157958247764599
+          ],
+          "excitation": [
+            0.5795985648539377
+          ],
+          "decay": 1.0,
+          "events": 978,
+          "gofit": "least-squares",
+          "horizon": 800.0,
+          "negative_log_likelihood_under_hawk_objective": 626.4974992022578,
+          "seconds_all": [
+            0.000528791977558285,
+            0.0005030830216128379,
+            0.0004965419939253479,
+            0.0004967079730704427,
+            0.0004973750037606806
+          ],
+          "seconds_max": 0.000528791977558285,
+          "seconds_median": 0.0004973750037606806,
+          "seconds_min": 0.0004965419939253479,
+          "spectral_radius": 0.5795985648539377
+        }
+      ],
+      "decay_is_input": true,
+      "dimension": 1,
+      "library": "tick",
+      "max_iter": 500,
+      "penalty_C": 1000000000.0,
+      "timed": 5,
+      "tol": 1e-10,
+      "warmup": 1
+    },
+    {
+      "runs": [
+        {
+          "dimension": 1,
+          "nominal_n": 10000,
+          "completed": true,
+          "baseline": [
+            0.5121315487131393
+          ],
+          "excitation": [
+            0.5954898307985831
+          ],
+          "decay": 1.0,
+          "events": 10122,
+          "gofit": "likelihood",
+          "horizon": 8000.0,
+          "negative_log_likelihood_under_hawk_objective": 6223.782043930138,
+          "seconds_all": [
+            0.003766042005736381,
+            0.0037014579866081476,
+            0.003613292006775737,
+            0.0036350410082377493,
+            0.003654958010884002
+          ],
+          "seconds_max": 0.003766042005736381,
+          "seconds_median": 0.003654958010884002,
+          "seconds_min": 0.003613292006775737,
+          "spectral_radius": 0.595489830798583
+        },
+        {
+          "dimension": 1,
+          "nominal_n": 10000,
+          "completed": true,
+          "baseline": [
+            0.5116779201643413
+          ],
+          "excitation": [
+            0.5958482547766899
+          ],
+          "decay": 1.0,
+          "events": 10122,
+          "gofit": "least-squares",
+          "horizon": 8000.0,
+          "negative_log_likelihood_under_hawk_objective": 6223.781539608344,
+          "seconds_all": [
+            0.0008532500069122761,
+            0.0008536250097677112,
+            0.0008409169968217611,
+            0.0008399170183110982,
+            0.0008331669960170984
+          ],
+          "seconds_max": 0.0008536250097677112,
+          "seconds_median": 0.0008409169968217611,
+          "seconds_min": 0.0008331669960170984,
+          "spectral_radius": 0.5958482547766899
+        }
+      ],
+      "decay_is_input": true,
+      "dimension": 1,
+      "library": "tick",
+      "max_iter": 500,
+      "penalty_C": 1000000000.0,
+      "timed": 5,
+      "tol": 1e-10,
+      "warmup": 1
+    },
+    {
+      "runs": [
+        {
+          "dimension": 1,
+          "nominal_n": 100000,
+          "completed": true,
+          "baseline": [
+            0.4953011998529479
+          ],
+          "excitation": [
+            0.6026601009174031
+          ],
+          "decay": 1.0,
+          "events": 99718,
+          "gofit": "likelihood",
+          "horizon": 80000.0,
+          "negative_log_likelihood_under_hawk_objective": 62179.649363146105,
+          "seconds_all": [
+            0.1294445419916883,
+            0.12480970800970681,
+            0.1240271249844227,
+            0.12467716602259316,
+            0.12413008400471881
+          ],
+          "seconds_max": 0.1294445419916883,
+          "seconds_median": 0.12467716602259316,
+          "seconds_min": 0.1240271249844227,
+          "spectral_radius": 0.6026601009174031
+        },
+        {
+          "dimension": 1,
+          "nominal_n": 100000,
+          "completed": true,
+          "baseline": [
+            0.49756124696830184
+          ],
+          "excitation": [
+            0.6008469073547599
+          ],
+          "decay": 1.0,
+          "events": 99718,
+          "gofit": "least-squares",
+          "horizon": 80000.0,
+          "negative_log_likelihood_under_hawk_objective": 62179.796737330485,
+          "seconds_all": [
+            0.004991958994651213,
+            0.004979958001058549,
+            0.004928959009703249,
+            0.004938124999171123,
+            0.004993332986487076
+          ],
+          "seconds_max": 0.004993332986487076,
+          "seconds_median": 0.004979958001058549,
+          "seconds_min": 0.004928959009703249,
+          "spectral_radius": 0.60084690735476
+        }
+      ],
+      "decay_is_input": true,
+      "dimension": 1,
+      "library": "tick",
+      "max_iter": 500,
+      "penalty_C": 1000000000.0,
+      "timed": 5,
+      "tol": 1e-10,
+      "warmup": 1
+    },
+    {
+      "runs": [
+        {
+          "dimension": 1,
+          "nominal_n": 1000000,
+          "completed": true,
+          "baseline": [
+            0.49948503426782637
+          ],
+          "excitation": [
+            0.600596231255594
+          ],
+          "decay": 1.0,
+          "events": 1000453,
+          "gofit": "likelihood",
+          "horizon": 800000.0,
+          "negative_log_likelihood_under_hawk_objective": 622145.4430848053,
+          "seconds_all": [
+            0.2935682499955874,
+            0.2924426669778768,
+            0.2937124170130119,
+            0.2888563329761382,
+            0.28939320900826715
+          ],
+          "seconds_max": 0.2937124170130119,
+          "seconds_median": 0.2924426669778768,
+          "seconds_min": 0.2888563329761382,
+          "spectral_radius": 0.6005962312555941
+        },
+        {
+          "dimension": 1,
+          "nominal_n": 1000000,
+          "completed": true,
+          "baseline": [
+            0.49978172651044656
+          ],
+          "excitation": [
+            0.6003589866034306
+          ],
+          "decay": 1.0,
+          "events": 1000453,
+          "gofit": "least-squares",
+          "horizon": 800000.0,
+          "negative_log_likelihood_under_hawk_objective": 622145.4697696595,
+          "seconds_all": [
+            0.04680104099679738,
+            0.04636262499843724,
+            0.04626704097609036,
+            0.052495457988698035,
+            0.049913583003217354
+          ],
+          "seconds_max": 0.052495457988698035,
+          "seconds_median": 0.04680104099679738,
+          "seconds_min": 0.04626704097609036,
+          "spectral_radius": 0.6003589866034305
+        }
+      ],
+      "decay_is_input": true,
+      "dimension": 1,
+      "library": "tick",
+      "max_iter": 500,
+      "penalty_C": 1000000000.0,
+      "timed": 5,
+      "tol": 1e-10,
+      "warmup": 1
+    }
+  ]
+}

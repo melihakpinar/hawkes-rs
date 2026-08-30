@@ -22,24 +22,58 @@ bench_setup() {
     cargo build --release --examples --manifest-path "$ROOT/Cargo.toml"
 }
 
+# §4.1's cell budget, enforced by killing the process. A budget that cannot interrupt
+# a call in progress is not a budget: tick's d=100 least-squares fit was observed
+# running past 40 minutes inside a single fit() call, where no in-process check can
+# fire. Each grid point therefore runs as its own process and is killed at the cap.
+CELL_BUDGET=${BENCH_CELL_BUDGET:-1800}
+
+run_capped() {
+    "$@" &
+    pid=$!
+    ( sleep "$CELL_BUDGET"; kill -9 "$pid" 2>/dev/null ) 2>/dev/null &
+    watcher=$!
+    wait "$pid" 2>/dev/null; status=$?
+    kill "$watcher" 2>/dev/null
+    wait "$watcher" 2>/dev/null || true
+    if [ "$status" -ne 0 ]; then
+        echo "  cell exceeded ${CELL_BUDGET}s or failed (status $status); recorded as not completed" >&2
+    fi
+    return 0
+}
+
 # bench_fit <d> <grid>
 bench_fit() {
     d=$1; grid=$2
     bench_setup
-    echo "=== hawk, d=$d ===" >&2
-    "$ROOT/target/release/examples/bench_fit" "$WORK" "$d" "$grid"
-    echo "=== tick, d=$d ===" >&2
-    "$VENV/bin/python" "$ROOT/benchmarks/suite/bench_fit.py" "$WORK" "$d" "$grid"
-    echo "=== scoring tick's parameters under hawk's objective ===" >&2
-    "$ROOT/target/release/examples/bench_score" "$WORK" "$d"
-    "$VENV/bin/python" - "$WORK" "$d" "$ROOT/benchmarks/results/fit-d$d.json" <<'PY'
+    for n in $(echo "$grid" | tr ',' ' '); do
+        echo "=== d=$d n=$n ===" >&2
+        run_capped "$ROOT/target/release/examples/bench_fit" "$WORK" "$d" "$n"
+        run_capped "$VENV/bin/python" "$ROOT/benchmarks/suite/bench_fit.py" "$WORK" "$d" "$n"
+        run_capped "$ROOT/target/release/examples/bench_score" "$WORK" "$d" "$n"
+    done
+    "$VENV/bin/python" - "$WORK" "$d" "$grid" "$ROOT/benchmarks/results/fit-d$d.json" <<'PY'
 import json, pathlib, sys
-work, d, out = pathlib.Path(sys.argv[1]), sys.argv[2], pathlib.Path(sys.argv[3])
-payload = {"benchmark": f"fit_d{d}",
-           "methodology": "benchmarks/README.md",
-           "hawk": json.loads((work / f"hawk_d{d}.json").read_text()),
-           "tick": json.loads((work / f"tick_d{d}.json").read_text())}
-out.write_text(json.dumps(payload, indent=2) + "\n")
+work, d, grid, out = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3], pathlib.Path(sys.argv[4])
+hawk, tick = [], []
+for n in grid.split(","):
+    hp, tp = work / f"hawk_d{d}_n{n}.json", work / f"tick_d{d}_n{n}.json"
+    if hp.exists():
+        hawk.append(json.loads(hp.read_text()))
+    else:
+        hawk.append({"library": "hawk", "dimension": int(d),
+                     "run": {"dimension": int(d), "nominal_n": int(n), "completed": False,
+                             "abort_reason": "process killed at the cell budget"}})
+    if tp.exists():
+        tick.append(json.loads(tp.read_text()))
+    else:
+        tick.append({"library": "tick", "dimension": int(d),
+                     "runs": [{"dimension": int(d), "nominal_n": int(n), "completed": False,
+                               "abort_reason": "process killed at the cell budget"}]})
+out.write_text(json.dumps({"benchmark": f"fit_d{d}",
+                           "methodology": "benchmarks/README.md",
+                           "cell_budget_seconds": 1800,
+                           "hawk": hawk, "tick": tick}, indent=2) + "\n")
 print(f"wrote {out}", file=sys.stderr)
 PY
 }

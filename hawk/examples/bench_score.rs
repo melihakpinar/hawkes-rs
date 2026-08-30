@@ -50,10 +50,11 @@ fn read_events(path: &str) -> (f64, Vec<Vec<f64>>) {
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let dir = args.next().expect("usage: bench_score <dir> <d>");
+    let dir = args.next().expect("usage: bench_score <dir> <d> <n>");
     let d: usize = args.next().expect("dimension").parse().unwrap();
+    let n: usize = args.next().expect("event count").parse().unwrap();
 
-    let path = format!("{dir}/tick_d{d}.json");
+    let path = format!("{dir}/tick_d{d}_n{n}.json");
     let mut side: Side = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
 
     for run in &mut side.runs {

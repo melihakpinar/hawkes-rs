@@ -47,6 +47,17 @@ fn json_array(values: &[f64]) -> String {
     format!("[{}]", parts.join(","))
 }
 
+/// One file per grid point, written as soon as that point finishes, so a cell killed
+/// at the §4.1 budget loses only the cell in flight rather than the whole dimension.
+fn write_point(out_dir: &str, d: usize, nominal: usize, truth: &Parameters, run: String) {
+    let body = format!(
+        r#"{{"library":"hawk","dimension":{d},"seed":{SEED},"warmup":{WARMUP},"timed":{TIMED},"true_baseline":{},"true_excitation":{},"true_decay":{DECAY:?},"run":{run}}}"#,
+        json_array(truth.baseline()),
+        json_array(truth.excitation()),
+    );
+    fs::write(format!("{out_dir}/hawk_d{d}_n{nominal}.json"), body + "\n").unwrap();
+}
+
 fn main() {
     let mut args = std::env::args().skip(1);
     let out_dir = args.next().expect("usage: bench_fit <dir> <d> <n,n,...>");
@@ -66,7 +77,6 @@ fn main() {
         .iter()
         .sum();
 
-    let mut records = Vec::new();
     for nominal in grid {
         let horizon = nominal as f64 / rate;
         let mut rng = ChaCha8Rng::seed_from_u64(SEED);
@@ -108,9 +118,15 @@ fn main() {
 
         if let Some(reason) = aborted {
             eprintln!("d={d} n={nominal} events={realized} ABORTED: {reason}");
-            records.push(format!(
-                r#"{{"dimension":{d},"nominal_n":{nominal},"events":{realized},"horizon":{horizon:?},"completed":false,"abort_reason":"{reason}"}}"#
-            ));
+            write_point(
+                &out_dir,
+                d,
+                nominal,
+                &truth,
+                format!(
+                    r#"{{"dimension":{d},"nominal_n":{nominal},"events":{realized},"horizon":{horizon:?},"completed":false,"abort_reason":"{reason}"}}"#
+                ),
+            );
             continue;
         }
 
@@ -127,30 +143,28 @@ fn main() {
             result.converged,
             spectral
         );
-        records.push(format!(
-            r#"{{"dimension":{d},"nominal_n":{nominal},"events":{realized},"horizon":{horizon:?},"completed":true,"seconds_median":{:?},"seconds_min":{:?},"seconds_max":{:?},"seconds_all":{},"negative_log_likelihood":{:?},"iterations":{},"gradient_norm":{:?},"converged":{},"objective_evaluations":{},"gradient_evaluations":{},"spectral_radius":{:?},"baseline":{},"excitation":{},"decay":{:?}}}"#,
-            elapsed[TIMED / 2],
-            elapsed[0],
-            elapsed[TIMED - 1],
-            json_array(&elapsed),
-            result.negative_log_likelihood,
-            result.iterations,
-            result.gradient_norm,
-            result.converged,
-            result.objective_evaluations,
-            result.gradient_evaluations,
-            spectral,
-            json_array(result.parameters.baseline()),
-            json_array(result.parameters.excitation()),
-            result.parameters.decay(),
-        ));
+        write_point(
+            &out_dir,
+            d,
+            nominal,
+            &truth,
+            format!(
+                r#"{{"dimension":{d},"nominal_n":{nominal},"events":{realized},"horizon":{horizon:?},"completed":true,"seconds_median":{:?},"seconds_min":{:?},"seconds_max":{:?},"seconds_all":{},"negative_log_likelihood":{:?},"iterations":{},"gradient_norm":{:?},"converged":{},"objective_evaluations":{},"gradient_evaluations":{},"spectral_radius":{:?},"baseline":{},"excitation":{},"decay":{:?}}}"#,
+                elapsed[TIMED / 2],
+                elapsed[0],
+                elapsed[TIMED - 1],
+                json_array(&elapsed),
+                result.negative_log_likelihood,
+                result.iterations,
+                result.gradient_norm,
+                result.converged,
+                result.objective_evaluations,
+                result.gradient_evaluations,
+                spectral,
+                json_array(result.parameters.baseline()),
+                json_array(result.parameters.excitation()),
+                result.parameters.decay(),
+            ),
+        );
     }
-
-    let body = format!(
-        r#"{{"library":"hawk","dimension":{d},"seed":{SEED},"warmup":{WARMUP},"timed":{TIMED},"true_baseline":{},"true_excitation":{},"true_decay":{DECAY:?},"runs":[{}]}}"#,
-        json_array(truth.baseline()),
-        json_array(truth.excitation()),
-        records.join(",")
-    );
-    fs::write(format!("{out_dir}/hawk_d{d}.json"), body + "\n").unwrap();
 }

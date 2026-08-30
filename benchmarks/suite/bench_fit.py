@@ -100,10 +100,10 @@ def main(directory, d, grid):
     # d = 1 so the cost of the objective difference is visible where both work.
     objectives = ["likelihood", "least-squares"] if d == 1 else ["least-squares"]
 
-    runs = []
     for nominal in grid:
         horizon, events = read_events(directory / f"events_d{d}_n{nominal}.txt")
         realized = int(sum(len(c) for c in events))
+        runs = []
         for gofit in objectives:
             record = {"dimension": d, "nominal_n": nominal, "events": realized,
                       "horizon": horizon}
@@ -115,11 +115,13 @@ def main(directory, d, grid):
             else:
                 print(f"d={d} n={nominal} gofit={gofit} ABORTED: "
                       f"{record['abort_reason'][:90]}", file=sys.stderr)
-
-    body = {"library": "tick", "dimension": d, "warmup": WARMUP, "timed": TIMED,
-            "penalty_C": PENALTY_C, "tol": TOL, "max_iter": MAX_ITER,
-            "decay_is_input": True, "runs": runs}
-    (directory / f"tick_d{d}.json").write_text(json.dumps(body, indent=2) + "\n")
+        # One file per grid point, written as soon as that point finishes, so a cell
+        # killed at the §4.1 budget loses only the cell in flight (see _common.sh).
+        body = {"library": "tick", "dimension": d, "warmup": WARMUP, "timed": TIMED,
+                "penalty_C": PENALTY_C, "tol": TOL, "max_iter": MAX_ITER,
+                "decay_is_input": True, "runs": runs}
+        (directory / f"tick_d{d}_n{nominal}.json").write_text(
+            json.dumps(body, indent=2) + "\n")
 
 
 if __name__ == "__main__":
