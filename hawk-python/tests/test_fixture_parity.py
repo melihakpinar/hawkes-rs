@@ -4,6 +4,24 @@ The gate is the same gate: the computation scale from
 ``docs/derivations/univariate_loglikelihood.md`` §5, not ``|nll|``, and not loosened
 because this is Python. A comparison that fails here and passes in Rust is a finding
 about the bindings.
+
+Sabotage
+--------
+Two mutations, chosen so that each is caught by exactly one of the tests below
+(``docs/verification-log.md`` S49):
+
+- Transposing ``matrix_from`` in ``hawk-python/src/lib.rs`` (``view[[j, i]]``) turns
+  ``test_oq8_identity_holds_through_the_bindings`` red on ``bivariate_asymmetric``, by
+  131.8 against a gate of 7.6e-7. The whole Rust suite stays green — 22 targets, no
+  failures — because no Rust test goes through ``matrix_from``. That is this file's
+  reason to exist, stated in the paragraph above and now measured.
+- Advancing the horizon by one ulp in ``univariate_negative_log_likelihood`` only
+  turns ``test_univariate_and_multivariate_agree_bitwise_through_the_bindings`` red, by
+  2 ulp, while the identity test above stays green: a one-ulp horizon moves the value
+  some fifteen orders of magnitude below the ``1e-9 * scale`` gate.
+
+The pair is the point. Neither test subsumes the other, and a single mutation would
+have suggested one of them was redundant.
 """
 
 from __future__ import annotations
