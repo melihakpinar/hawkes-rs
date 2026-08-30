@@ -32,3 +32,12 @@ __pycache__/
 
 # Positioning probe scratch (venv and generated event files)
 target/positioning-probe*/
+
+# The compiled extension module. `maturin develop` writes it into the package source
+# tree, so without this every local build dirties the tree and the next commit carries
+# a 3 MB binary. The `.pyi` stub beside it is source and stays tracked.
+#
+# Three of these blobs are already in history and are deliberately left there.
+# `docs/repository-history.md` says why, and why not to run `git filter-repo`.
+hawk-python/python/hawk/_hawk*.so
+hawk-python/python/hawk/_hawk*.pyd
