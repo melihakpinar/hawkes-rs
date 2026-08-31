@@ -5,6 +5,41 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-08-31
+
+First release. Univariate and multivariate exponential-kernel Hawkes processes:
+simulation, log-likelihood, analytic gradient, maximum-likelihood estimation, Python
+wheels, and a benchmark suite measured against `tick`.
+
+### Added — M4, benchmarks and the README
+
+- `benchmarks/README.md`: methodology fixed and committed before any number was
+  produced — warmup, repetitions, statistic, grid, threads, hardware, and the
+  asymmetries that could not be equalised.
+- `benchmarks/suite/`: `fit_d1`, `fit_d10`, `fit_d100`, `simulate` and `window_bias`,
+  each standalone, each writing committed JSON to `benchmarks/results/`.
+- Every benchmark records both libraries' fitted parameters and scores them under
+  `hawk`'s objective, so two different objectives sit in one unit.
+- `benchmarks/suite/create_diagrams.py` regenerates every chart from the committed JSON
+  with no plotting dependency and no manual step.
+- `benchmarks/suite/readme_tables.py` regenerates the README's benchmark tables from the
+  same JSON, so every published number is re-checkable by diff.
+- `hawk/examples/quickstart.rs` and `hawk-python/examples/quickstart.py`: the README's
+  usage examples, compiled, run and type-checked by CI so they cannot drift from the
+  prose.
+- README rewritten around what was measured, including where `tick` wins.
+
+### Measured
+
+- `tick` cannot fit a multivariate likelihood through `HawkesExpKern`: every
+  deterministic solver leaves the non-negative region its C++ model requires and raises.
+  `sgd` returns and is visibly wrong. At `d > 1` the comparison is therefore against
+  `tick`'s least-squares default, a different estimator.
+- `tick`'s learner takes no observation window, so its baseline cannot respond to one.
+  `benchmarks/results/window-bias.json` records the consequence and the
+  `HawkesExpKern.fit` signature alongside it.
+
+
 ### Added — M1, univariate exponential-kernel Hawkes
 
 First public API. `hawk::univariate`:

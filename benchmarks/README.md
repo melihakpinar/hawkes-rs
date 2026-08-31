@@ -139,10 +139,22 @@ is still not literally the same objective.
 
 | | `hawk` | `tick` |
 | --- | --- | --- |
-| Solver | L-BFGS (`argmin` 0.11), More-Thuente line search, 7 correction pairs | `HawkesExpKern`, `solver="bfgs"` |
+| Solver | L-BFGS (`argmin` 0.11), More-Thuente line search, 7 correction pairs univariate / 10 multivariate | `HawkesExpKern`, `solver="bfgs"` |
 | Space | log-parameter space, objective per event | natural parameters, penalized |
 | Stop | gradient tolerance `1e-10` | `tol = 1e-10` |
-| Iteration cap | 500 | 500 |
+| Iteration cap | 500 univariate, 1000 multivariate | 500 |
+
+> **Correction.** This row first read "500" for `hawk` in both columns. That was wrong:
+> `univariate::fit` caps at 500 and `multivariate::fit` at 1000
+> (`hawk/src/univariate.rs:719`, `hawk/src/multivariate.rs:1056`). The error was found
+> while reading the `d = 100` result, and is corrected here rather than quietly. It is a
+> misdescription of existing code, not a setting changed after seeing numbers — no cap
+> was altered, and no measurement moved.
+>
+> The correction-pair count in the row above was wrong the same way, and for the same
+> reason: 7 is the univariate value (`hawk/src/univariate.rs:704`), 10 the multivariate
+> one (`hawk/src/multivariate.rs:1049`). Both errors came from describing `hawk` from the
+> univariate code alone.
 
 `hawk` stops on a gradient norm; `tick`'s `tol` feeds its own solver's criterion, which
 is not the same quantity. **Times measured under different convergence criteria are not
