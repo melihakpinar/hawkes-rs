@@ -64,11 +64,7 @@ shape: [`fit_multivariate.py`](hawkes-python/examples/fit_multivariate.py).
 
 ```sh
 cargo add hawkes-rs
-cargo add rand@0.9 rand_chacha@0.9
 ```
-
-`simulate` takes an `impl rand::Rng`, so the caller's `rand` must be the major version this
-was built against. A bare `cargo add rand` resolves to 0.10 and will not compile.
 
 ```rust
 use hawkes::univariate::{Observation, Parameters, fit, simulate};
@@ -86,6 +82,19 @@ println!("{:.4}", result.parameters.baseline());     // 0.5041
 println!("{}", result.parameters.is_stationary());   // true
 ```
 
+The example needs `rand` alongside it, and the version is not free to choose:
+
+```sh
+cargo add rand@0.9 rand_chacha@0.9
+```
+
+`simulate` takes an `impl rand::Rng`, so `rand` is part of the public signature and a
+caller's copy has to be the major version this was built against. A bare `cargo add rand`
+resolves to 0.10 and fails on the trait bound. That coupling is a design problem rather
+than a documentation one — it makes every future `rand` release a breaking change for
+callers — and it is [#42](https://github.com/melihakpinar/hawkes-rs/issues/42), to be
+settled in v0.2 while the API is still pre-alpha.
+
 Both programs are committed, compiled and run by CI, and print identical figures:
 [`quickstart.rs`](hawkes/examples/quickstart.rs),
 [`quickstart.py`](hawkes-python/examples/quickstart.py). Both were re-run from the published
@@ -102,7 +111,10 @@ stopping criterion is not the same kind of criterion.
 
 ![Univariate fit wall clock](docs/diagrams/fit-d1.svg)
 
-| events | hawkes-rs | tick, likelihood | ratio | tick, least-squares | ratio |
+Both ratio columns are **hawkes-rs / tick**: below 1 means `hawkes-rs` is faster, above 1
+means `tick` is. Every ratio in this README reads that way.
+
+| events | hawkes-rs | tick, likelihood | hawkes-rs / tick | tick, least-squares | hawkes-rs / tick |
 | --- | --- | --- | --- | --- | --- |
 | 978 | 0.0021 | 0.0010 | 2.14x | 0.0005 | 4.39x |
 | 10,122 | 0.0117 | 0.0037 | 3.19x | 0.0008 | 13.83x |
@@ -162,14 +174,14 @@ number generators, so realized counts differ and the comparison is per event.
 
 ![Simulation wall clock](docs/diagrams/simulate.svg)
 
-| d | events | hawkes-rs | tick | tick / hawkes-rs |
+| d | events | hawkes-rs | tick | hawkes-rs / tick |
 | --- | --- | --- | --- | --- |
-| 1 | 10,118 | 0.0017 | 0.0009 | 0.54x |
-| 1 | 100,143 | 0.0098 | 0.0085 | 0.87x |
-| 1 | 999,707 | 0.0657 | 0.0857 | 1.31x |
-| 10 | 10,118 | 0.0018 | 0.0200 | 11.22x |
-| 10 | 100,143 | 0.0176 | 0.1960 | 11.15x |
-| 10 | 999,707 | 0.1763 | 2.0195 | 11.45x |
+| 1 | 10,118 | 0.0017 | 0.0009 | 1.84x |
+| 1 | 100,143 | 0.0098 | 0.0085 | 1.14x |
+| 1 | 999,707 | 0.0657 | 0.0857 | 0.77x |
+| 10 | 10,118 | 0.0018 | 0.0200 | 0.09x |
+| 10 | 100,143 | 0.0176 | 0.1960 | 0.09x |
+| 10 | 999,707 | 0.1763 | 2.0195 | 0.09x |
 
 Raw: [`simulate.json`](benchmarks/results/simulate.json).
 
@@ -203,8 +215,8 @@ Named here rather than left to be found.
 - **The univariate fit on its least-squares default, at every size.** Up to 20.49x. A
   different estimator, and the nll table shows what its answer costs — but if least squares
   is what you want, it is much faster.
-- **Simulation at `d = 1` below roughly a million events.** 0.54x at ten thousand, reaching
-  parity near a hundred thousand.
+- **Simulation at `d = 1` below roughly a million events.** 1.84x at ten thousand, near
+  parity at a hundred thousand, and reversing to 0.77x at a million.
 - **`d = 100`, where neither library produces a usable fit.** `tick` returns nothing;
   `hawkes-rs` returns a number that has not converged. Nobody wins this one.
 

@@ -55,8 +55,10 @@ def fit_d1(results):
     if not j:
         return
     H, T = hawk_runs(j["hawkes"]), tick_runs(j["tick"])
-    print("`benchmarks/results/fit-d1.json`. Seconds; ratio is `hawkes / tick`.\n")
-    print("| events | hawkes | hawkes [min, max] | tick, likelihood | ratio | tick, least-squares | ratio |")
+    print("`benchmarks/results/fit-d1.json`. Seconds. Every ratio in the README is\n"
+          "**hawkes-rs / tick**: below 1 means hawkes-rs is faster, above 1 means tick is.\n")
+    print("| events | hawkes | hawkes [min, max] | tick, likelihood | hawkes-rs / tick "
+          "| tick, least-squares | hawkes-rs / tick |")
     print("| --- | --- | --- | --- | --- | --- | --- |")
     for h in sorted([r for r in H if r.get("completed")], key=lambda r: r["nominal_n"]):
         n = h["nominal_n"]
@@ -119,12 +121,12 @@ def simulate(results):
         return
     print("`benchmarks/results/simulate.json`. One realization to a fixed horizon. The "
           "two use different generators, so the realized counts differ; both are shown.\n")
-    print("| d | hawkes events | hawkes | tick events | tick | tick / hawkes |")
+    print("| d | hawkes events | hawkes | tick events | tick | hawkes-rs / tick |")
     print("| --- | --- | --- | --- | --- | --- |")
     for he, te in zip(j["hawkes"], j["tick"]):
         for hr, tr in zip(he["runs"], te["runs"]):
             if hr.get("completed") and tr.get("completed"):
-                ratio = tr["seconds_median"] / hr["seconds_median"]
+                ratio = hr["seconds_median"] / tr["seconds_median"]
                 print(f"| {he['dimension']} | {hr['events_median']:,} | {hr['seconds_median']:.4f} "
                       f"| {tr['events_median']:,} | {tr['seconds_median']:.4f} | {ratio:.2f}x |")
 
