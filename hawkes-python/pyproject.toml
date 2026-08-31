@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "hawkes-rs"
-version = "0.1.1"
+version = "0.1.2"
 description = "Multivariate Hawkes processes: simulation and maximum-likelihood estimation"
 readme = "README.md"
 requires-python = ">=3.9"
