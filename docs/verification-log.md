@@ -1229,3 +1229,34 @@ Each test catches what the other cannot, and a single mutation would have left o
 them looking redundant. This is the §3 rule about widening the case set, applied before
 the fact instead of after: a tolerance gate and a bitwise gate answer different
 questions, and the sabotage has to be able to tell them apart.
+
+## S50 — the publish job's upload step proves nothing on its own
+
+`twine upload --skip-existing` exits 0 whether it uploaded every file or skipped every
+file: "already exists" is a warning, not an error. The publish job's exit code therefore
+carried no information about whether the release was complete. A run in which nothing
+was uploaded would have been exactly as green as one in which five wheels were.
+
+This is the shape CLAUDE.md §3 exists to catch — a verification step that passes without
+verifying. It was found by asking why a green publish would be trusted, not by a failure:
+the v0.1.0-publish run did upload correctly, and the gap was there regardless.
+
+`.github/scripts/verify_pypi_release.py` now runs after the upload and compares `dist/`
+against the `/simple/` index pip resolves against, **by sha256** rather than by filename,
+so a name that exists on PyPI under a different build cannot satisfy it.
+
+### Sabotage
+
+Run against the real PyPI release with a real `dist/` downloaded from it:
+
+| case | result |
+| --- | --- |
+| the six published files, unmodified | green, exit 0 |
+| a seventh wheel that was never uploaded (`musllinux_1_2_x86_64`) | **red**, exit 1, "missing 1" |
+| a published filename whose bytes differ by one appended byte | **red**, exit 1, "mismatched 1" |
+| an empty `dist/` — the upload sent nothing at all | **red**, exit 1, "refusing to report a successful publish" |
+
+The second case is the one a filename-only check would have missed, which is why the
+comparison is on the digest. The third is the failure this whole entry is about: an empty
+directory is the state in which twine is most certainly green and least certainly
+correct.

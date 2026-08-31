@@ -219,6 +219,9 @@ jobs:
     permissions:
       contents: read
     steps:
+      # The verification script below lives in the repository.
+      - uses: actions/checkout@v5
+
       # Every wheel artifact, then the sdist, flattened into one directory.
       # merge-multiple puts their contents side by side rather than in per-artifact
       # subdirectories. Two steps rather than one brace pattern, so the match is
@@ -265,3 +268,14 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: twine upload --skip-existing --non-interactive dist/*
+
+      # The step above exits 0 whether it uploaded everything or skipped everything:
+      # --skip-existing makes "already exists" a warning. Its exit code therefore says
+      # nothing about whether the release is complete, and a publish job that stops
+      # there is a verification step that verifies nothing.
+      #
+      # This asserts the outcome against the index pip resolves against, by sha256 so a
+      # name collision with a different build cannot pass. Sabotage is recorded in
+      # docs/verification-log.md.
+      - name: Verify the release is on PyPI
+        run: python .github/scripts/verify_pypi_release.py hawkes-rs dist
