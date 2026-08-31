@@ -19,12 +19,12 @@ wheels, and a benchmark suite measured against `tick`.
 - `benchmarks/suite/`: `fit_d1`, `fit_d10`, `fit_d100`, `simulate` and `window_bias`,
   each standalone, each writing committed JSON to `benchmarks/results/`.
 - Every benchmark records both libraries' fitted parameters and scores them under
-  `hawk`'s objective, so two different objectives sit in one unit.
+  `hawkes`'s objective, so two different objectives sit in one unit.
 - `benchmarks/suite/create_diagrams.py` regenerates every chart from the committed JSON
   with no plotting dependency and no manual step.
 - `benchmarks/suite/readme_tables.py` regenerates the README's benchmark tables from the
   same JSON, so every published number is re-checkable by diff.
-- `hawk/examples/quickstart.rs` and `hawk-python/examples/quickstart.py`: the README's
+- `hawkes/examples/quickstart.rs` and `hawkes-python/examples/quickstart.py`: the README's
   usage examples, compiled, run and type-checked by CI so they cannot drift from the
   prose.
 - README rewritten around what was measured, including where `tick` wins.
@@ -42,7 +42,7 @@ wheels, and a benchmark suite measured against `tick`.
 
 ### Added — M1, univariate exponential-kernel Hawkes
 
-First public API. `hawk::univariate`:
+First public API. `hawkes::univariate`:
 
 - `Parameters` — validated `mu`, `alpha`, `beta`, with `branching_ratio`,
   `is_stationary` and `stationary_mean_intensity` [Laub2015, eq. 5, 6].
@@ -60,7 +60,7 @@ First public API. `hawk::univariate`:
 
 ### Added — M2, multivariate
 
-`hawk::multivariate`, `d` components with cross-excitation and a shared decay:
+`hawkes::multivariate`, `d` components with cross-excitation and a shared decay:
 
 - `Parameters` — baseline vector and row-major excitation matrix, `alpha[i][j]` meaning
   "j excites i". `branching_ratio_spectral_radius`, `is_stationary`,
@@ -112,13 +112,13 @@ value and gradient.
 - `Error::ProcessDimensionMismatch` is the new variant, distinct from
   `DimensionMismatch`, which remains about the internal shape of a single `Parameters`
   (`baseline` against `excitation`).
-- `hawk-python` no longer carries a `check_dimensions` shim. The `ValueError` a Python
+- `hawkes-python` no longer carries a `check_dimensions` shim. The `ValueError` a Python
   caller sees is now raised from the same check a Rust caller gets, so the two cannot
   drift apart.
 - `negative_log_likelihood` computes the value in one pass without computing the
   gradient. It previously delegated to `negative_log_likelihood_and_gradient` and
   discarded the gradient. The returned value is bitwise unchanged, enforced by
-  `hawk/tests/bit_identical_evaluation.rs`; fitted parameters are identical digit for
+  `hawkes/tests/bit_identical_evaluation.rs`; fitted parameters are identical digit for
   digit. End-to-end fit time at `n = 1e6` went from 1.003165 s to 0.853488 s
   (`docs/positioning-probe.md` §20).
 
@@ -133,7 +133,7 @@ value and gradient.
   with a permanent negative control.
 - Round-trip property test over 200 cases, tolerance derived per realization from the
   observed Fisher information.
-- Differential test against `tick` now runs `hawk` rather than a stub.
+- Differential test against `tick` now runs `hawkes` rather than a stub.
 - Thirteen further sabotages recorded in `docs/verification-log.md` (S10-S22).
 
 ### Resolved
@@ -149,9 +149,9 @@ value and gradient.
 ### Notes
 
 - The textbook Ozaki recursion [Laub2015, eq. 20] is **wrong** on tied input, by about
-  9% on a four-event example. `hawk` groups by distinct time instead. [Laub2015]
+  9% on a four-event example. `hawkes` groups by distinct time instead. [Laub2015]
   derives eq. 20 for a *simple* point process, so this is a hypothesis that does not
-  survive `hawk`'s input contract rather than an error in the paper.
+  survive `hawkes`'s input contract rather than an error in the paper.
 - On tied data the objective is not a likelihood, so the MLE asymptotics do not apply.
   The arithmetic is unaffected. See `univariate_loglikelihood.md` §3.1.
 - Multivariate remains unimplemented; the multivariate fixtures are parsed and
@@ -159,7 +159,7 @@ value and gradient.
 
 ### Added — M0, verification infrastructure
 
-- Cargo workspace: `hawk` (core) and `hawk-python` (bindings placeholder).
+- Cargo workspace: `hawkes` (core) and `hawkes-python` (bindings placeholder).
 - Pinned `tick` oracle image under `benchmarks/docker/`: CPython 3.13.5,
   `tick` 0.8.0.2, `linux/amd64`, complete pinned dependency closure.
 - Six reference fixtures in `tests/fixtures/` — univariate through trivariate,

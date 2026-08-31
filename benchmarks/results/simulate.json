@@ -1,9 +1,9 @@
 {
   "benchmark": "simulate",
   "methodology": "benchmarks/README.md",
-  "hawk": [
+  "hawkes": [
     {
-      "library": "hawk",
+      "library": "hawkes",
       "benchmark": "simulate",
       "dimension": 1,
       "seed": 20260831,
@@ -92,7 +92,7 @@
       ]
     },
     {
-      "library": "hawk",
+      "library": "hawkes",
       "benchmark": "simulate",
       "dimension": 10,
       "seed": 20260831,

@@ -39,5 +39,5 @@ target/positioning-probe*/
 #
 # Three of these blobs are already in history and are deliberately left there.
 # `docs/repository-history.md` says why, and why not to run `git filter-repo`.
-hawk-python/python/hawk/_hawk*.so
-hawk-python/python/hawk/_hawk*.pyd
+hawkes-python/python/hawkes/_hawkes*.so
+hawkes-python/python/hawkes/_hawkes*.pyd

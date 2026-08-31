@@ -4,7 +4,7 @@ This is the acceptance check for the container: it imports tick, simulates a sma
 univariate Hawkes process with a fixed seed, fits it by maximum likelihood, and
 prints the recovered parameters. If this runs, the oracle is usable.
 
-Run with:  docker run --rm --platform=linux/amd64 hawk-tick:0.8.0.2
+Run with:  docker run --rm --platform=linux/amd64 hawkes-tick:0.8.0.2
 """
 
 import sys

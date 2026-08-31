@@ -1,4 +1,4 @@
-# hawk
+# hawkes
 
 Multivariate Hawkes processes in Rust: simulation and maximum-likelihood estimation,
 with Python bindings.
@@ -18,33 +18,37 @@ with Python bindings.
 The library's only real product is **correct numbers**. A fast library that returns
 subtly wrong parameter estimates is worse than nothing, because users cannot tell.
 
-**`hawk` is not the fastest option.** On the univariate fit `tick` is
+**`hawkes` is not the fastest option.** On the univariate fit `tick` is
 3.18x faster at a million events, and on its own default objective it is faster
 still. Those numbers are below, first, with the conditions they were measured under.
-`hawk` exists for reasons that are not speed, and each of them is measured rather than
+`hawkes` exists for reasons that are not speed, and each of them is measured rather than
 claimed.
 
 ## Install
 
 Neither package is published yet; this is pre-alpha and the API will change.
 
+The distribution is named **`hawkes-rs`** on both registries because `hawkes` is taken
+on PyPI by an unrelated package. What you import is **`hawkes`**: `use hawkes::…` in
+Rust, `import hawkes` in Python.
+
 ```sh
 # Rust
-cargo add --git https://github.com/melihakpinar/hawk hawk
+cargo add --git https://github.com/melihakpinar/hawkes-rs hawkes-rs
 
 # Python — build the wheel from a checkout
-pip install maturin && maturin build --release --manifest-path hawk-python/Cargo.toml
-pip install target/wheels/hawk_hawkes-*.whl
+pip install maturin && maturin build --release --manifest-path hawkes-python/Cargo.toml
+pip install target/wheels/hawkes_rs-*.whl
 ```
 
 ## Quickstart
 
 Both programs below are committed, compiled and run by CI, and print the same numbers.
-Rust: [`hawk/examples/quickstart.rs`](hawk/examples/quickstart.rs). Python:
-[`hawk-python/examples/quickstart.py`](hawk-python/examples/quickstart.py).
+Rust: [`hawkes/examples/quickstart.rs`](hawkes/examples/quickstart.rs). Python:
+[`hawkes-python/examples/quickstart.py`](hawkes-python/examples/quickstart.py).
 
 ```rust
-use hawk::univariate::{Observation, Parameters, fit, simulate};
+use hawkes::univariate::{Observation, Parameters, fit, simulate};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
@@ -63,7 +67,7 @@ println!("{}", result.parameters.is_stationary());        // true
 
 ```python
 import numpy as np
-from hawk import univariate
+from hawkes import univariate
 
 truth = univariate.Parameters(baseline=0.5, excitation=0.6, decay=1.0)
 
@@ -79,7 +83,7 @@ Both print `24899 events`, a baseline of `0.5041`, an excitation of `0.5951` and
 of `0.9852`, against true values of `0.5`, `0.6` and `1.0`.
 
 The multivariate API has the same shape; see
-[`hawk-python/examples/fit_multivariate.py`](hawk-python/examples/fit_multivariate.py).
+[`hawkes-python/examples/fit_multivariate.py`](hawkes-python/examples/fit_multivariate.py).
 
 ## Benchmarks
 
@@ -96,18 +100,18 @@ stopping criterion is not the same kind of criterion. They are set out in
 
 ### Where `tick` wins
 
-`benchmarks/results/fit-d1.json`. Seconds; ratio is `hawk / tick`.
+`benchmarks/results/fit-d1.json`. Seconds; ratio is `hawkes / tick`.
 
-| events | hawk | hawk [min, max] | tick, likelihood | ratio | tick, least-squares | ratio |
+| events | hawkes | hawkes [min, max] | tick, likelihood | ratio | tick, least-squares | ratio |
 | --- | --- | --- | --- | --- | --- | --- |
 | 978 | 0.0021 | [0.0021, 0.0025] | 0.0010 | 2.14x | 0.0005 | 4.39x |
 | 10,122 | 0.0117 | [0.0102, 0.0155] | 0.0037 | 3.19x | 0.0008 | 13.83x |
 | 99,718 | 0.0946 | [0.0943, 0.1015] | 0.1248 | 0.76x | 0.0050 | 18.97x |
 | 1,000,453 | 0.9509 | [0.9463, 0.9621] | 0.2987 | 3.18x | 0.0464 | 20.49x |
 
-Both answers under `hawk`'s unpenalized negative log-likelihood, so two objectives sit in one unit. Lower is better; the last two columns are how much worse `tick`'s answer scores.
+Both answers under `hawkes`'s unpenalized negative log-likelihood, so two objectives sit in one unit. Lower is better; the last two columns are how much worse `tick`'s answer scores.
 
-| events | hawk nll | tick, likelihood | tick, least-squares |
+| events | hawkes nll | tick, likelihood | tick, least-squares |
 | --- | --- | --- | --- |
 | 978 | 625.5910 | +0.0771 | +0.9065 |
 | 10,122 | 6223.7778 | +0.0042 | +0.0037 |
@@ -120,7 +124,7 @@ least-squares default it is faster still — up to **20.49x** — but that is a 
 estimator*, not a faster implementation of the same one, and the second table is how far
 its answer sits from the likelihood optimum.
 
-The `n = 99,718` row, where `hawk` is faster, is **not presented as a win.** It
+The `n = 99,718` row, where `hawkes` is faster, is **not presented as a win.** It
 reproduces across runs (0.76x twice), but `tick`'s 0.1248 s there is **4.4x its own
 0.0279 s at the same nominal size in `docs/positioning-probe.md` §7**, measured on the
 same machine with the same settings. Something about that cell differs between the two
@@ -131,13 +135,13 @@ documents and this repository has not established what. Until it does, the row i
 
 `benchmarks/results/fit-d{1,10,100}.json`. The largest `n` each dimension completed, seconds.
 
-| d | parameters | events | hawk | tick, likelihood | tick, least-squares |
+| d | parameters | events | hawkes | tick, likelihood | tick, least-squares |
 | --- | --- | --- | --- | --- | --- |
 | 1 | 3 | 1,000,453 | 0.9509 | 0.2987 | 0.0464 |
 | 10 | 111 | 1,000,453 | 15.7469 | does not run | 1.3444 |
 | 100 | 10,101 | 99,718 | 216.6955 | does not run | — |
 
-### `hawk` does not converge at `d = 100`. This is a limitation.
+### `hawkes` does not converge at `d = 100`. This is a limitation.
 
 At 100 components the fit stops at its **1000-iteration cap with `converged = false`**,
 a final gradient norm of `3.518e-06` against the `1e-6` threshold. It returns numbers —
@@ -192,7 +196,7 @@ neither is credited with a win there.
 
 `benchmarks/results/simulate.json`. One realization to a fixed horizon. The two use different generators, so the realized counts differ; both are shown.
 
-| d | hawk events | hawk | tick events | tick | tick / hawk |
+| d | hawkes events | hawkes | tick events | tick | tick / hawkes |
 | --- | --- | --- | --- | --- | --- |
 | 1 | 10,118 | 0.0017 | 10,109 | 0.0009 | 0.54x |
 | 1 | 100,143 | 0.0098 | 99,766 | 0.0085 | 0.87x |
@@ -201,7 +205,7 @@ neither is credited with a win there.
 | 10 | 100,143 | 0.0176 | 99,766 | 0.1960 | 11.15x |
 | 10 | 999,707 | 0.1763 | 999,975 | 2.0195 | 11.45x |
 
-`hawk` is faster at `d = 10` by about 11x at every size, and at `d = 1` only from roughly
+`hawkes` is faster at `d = 10` by about 11x at every size, and at `d = 1` only from roughly
 a million events up. Below that `tick` is faster, by 1.8x at ten thousand events.
 
 ### Charts
@@ -213,7 +217,7 @@ Regenerate every chart from the committed JSON with
 
 ![Fit wall clock by dimension](docs/diagrams/fit-by-dimension.svg)
 
-## What `hawk` does that `tick` does not
+## What `hawkes` does that `tick` does not
 
 Each item is measured, and each links to the evidence. Nothing is claimed here that the
 repository does not show.
@@ -222,7 +226,7 @@ repository does not show.
 
 `tick`'s exponential-kernel estimators take `beta` as a fixed constructor argument;
 `HawkesExpKern.decays` echoes back what was passed in. There is no `tick` interface that
-treats it as a free parameter. `hawk` fits `(mu, alpha, beta)`, and the finite-difference
+treats it as a free parameter. `hawkes` fits `(mu, alpha, beta)`, and the finite-difference
 gradient check covers `d/dbeta`, which `tick` cannot check at all.
 
 ### It can express an observation window
@@ -233,7 +237,7 @@ cannot see the window returns the same number regardless.
 
 One realization of 20,382 events, true baseline `0.5`. Only the declared window changes.
 
-| dead time | declared horizon | hawk baseline | tick baseline |
+| dead time | declared horizon | hawkes baseline | tick baseline |
 | --- | --- | --- | --- |
 | 0% | 16,000 | 0.5000 | 0.5133 |
 | 5% | 16,800 | 0.3982 | 0.5133 |
@@ -243,7 +247,7 @@ One realization of 20,382 events, true baseline `0.5`. Only the declared window 
 
 `tick`'s column is constant because `HawkesExpKern.fit` has no parameter for the window;
 that is the structural point and it is the only thing claimed here. Its estimate also
-differs from `hawk`'s by 2.7% at **zero** dead time, and this repository has not
+differs from `hawkes`'s by 2.7% at **zero** dead time, and this repository has not
 established why, so no claim is made about it.
 
 Measured by [`benchmarks/suite/window_bias.sh`](benchmarks/suite/window_bias.sh),
@@ -328,9 +332,9 @@ cargo test --all-features        # --all-features: the rayon-gated tests are ski
 cargo clippy --all-targets --all-features -- -D warnings
 cargo fmt --check
 
-maturin develop --manifest-path hawk-python/Cargo.toml
-python -m pytest hawk-python/tests
-mypy --strict hawk-python/python/hawk hawk-python/examples
+maturin develop --manifest-path hawkes-python/Cargo.toml
+python -m pytest hawkes-python/tests
+mypy --strict hawkes-python/python/hawkes hawkes-python/examples
 ```
 
 Regenerating the fixtures needs Docker; see
@@ -408,8 +412,8 @@ the JSON records the hardware and the full spread, not just the median.
 ## Layout
 
 ```
-hawk/                  Rust core crate
-hawk-python/           PyO3 bindings, maturin
+hawkes/                  Rust core crate
+hawkes-python/           PyO3 bindings, maturin
 docs/
   derivations/         approved derivations; conventions.md pins the index conventions
   references/          papers (PDFs are not committed; see the README there for sources)

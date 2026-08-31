@@ -1,7 +1,7 @@
 {
   "experiment": "window_bias",
   "question": "OQ-5",
-  "methodology": "hawk/examples/window_bias.rs",
+  "methodology": "hawkes/examples/window_bias.rs",
   "events": 20382,
   "observed_horizon": 16000.0,
   "last_event": 15998.782895159451,

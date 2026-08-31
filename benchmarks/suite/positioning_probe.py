@@ -1,6 +1,6 @@
 """`tick` side of the positioning probe. See docs/positioning-probe.md.
 
-Reads the events written by the hawk side, so both fit exactly the same data.
+Reads the events written by the hawkes side, so both fit exactly the same data.
 Times HawkesExpKern only; loading and construction are outside the clock.
 """
 

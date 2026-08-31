@@ -1,4 +1,4 @@
-# CLAUDE.md — hawk
+# CLAUDE.md — hawkes
 
 A Rust library for multivariate Hawkes processes: simulation and maximum-likelihood
 estimation. Python bindings via PyO3.
@@ -7,7 +7,7 @@ estimation. Python bindings via PyO3.
 exponential-kernel fit — roughly 3x at n = 1e6. The probe decomposes that gap into a
 1.61x per-pass cost and a 36-vs-23 pass count, and does not establish what fraction of
 the per-pass difference comes from `tick` precomputing its exponential terms, which it
-can do because it holds beta fixed. `hawk` exists for different reasons, each of them
+can do because it holds beta fixed. `hawkes` exists for different reasons, each of them
 measured: no Rust crate does Hawkes estimation at all; `tick`'s learner cannot express
 an observation window, so its baseline estimates are biased whenever the window has
 trailing dead time (OQ-5); its loss is neither the log-likelihood nor its own documented
@@ -243,8 +243,8 @@ Invalid input is an error value, not a panic.
 ## 7. Layout
 
 ```
-hawk/                  Rust core crate
-hawk-python/           PyO3 bindings, maturin
+hawkes/                  Rust core crate
+hawkes-python/           PyO3 bindings, maturin
 docs/
   references/          papers (PDF)
   derivations/         approved derivations, conventions.md
@@ -310,7 +310,7 @@ Refs #<issue>
 
 
 Types: `feat`, `fix`, `test`, `docs`, `refactor`, `perf`, `chore`, `ci`.
-Scopes are crate or module names: `hawk`, `hawk-python`, `bench`, `fixtures`.
+Scopes are crate or module names: `hawkes`, `hawkes-python`, `bench`, `fixtures`.
 
 Summary line under 72 characters. Body wrapped at 72. A commit that encodes a
 convention decision from CLAUDE.md §1.3 MUST cite the source that settled it in

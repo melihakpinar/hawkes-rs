@@ -60,15 +60,15 @@ jobs:
         run: cargo run --example dump_fixture_nll target/rust-nll.json
 
       - name: Build and install the extension
-        run: maturin develop --manifest-path hawk-python/Cargo.toml
+        run: maturin develop --manifest-path hawkes-python/Cargo.toml
         env:
           VIRTUAL_ENV: ${{ env.pythonLocation }}
 
       - name: mypy --strict
-        run: mypy --strict hawk-python/python/hawk hawk-python/examples
+        run: mypy --strict hawkes-python/python/hawkes hawkes-python/examples
 
       - name: pytest
-        run: python -m pytest hawk-python/tests -q
+        run: python -m pytest hawkes-python/tests -q
 
   fixtures:
     name: fixtures are reproducible
@@ -83,14 +83,14 @@ jobs:
       # linux/amd64 is the pinned platform (benchmarks/docker/README.md) and matches
       # the runner, so no emulation is needed here.
       - name: Build the tick oracle image
-        run: docker build --platform=linux/amd64 -t hawk-tick:0.8.0.2 benchmarks/docker
+        run: docker build --platform=linux/amd64 -t hawkes-tick:0.8.0.2 benchmarks/docker
 
       - name: Smoke-test the oracle
-        run: docker run --rm --platform=linux/amd64 hawk-tick:0.8.0.2
+        run: docker run --rm --platform=linux/amd64 hawkes-tick:0.8.0.2
 
       - name: Fixtures match the oracle byte-for-byte
         run: |
           docker run --rm --platform=linux/amd64 \
             -v "$PWD/tests/fixtures":/out \
-            hawk-tick:0.8.0.2 \
+            hawkes-tick:0.8.0.2 \
             python /work/generate_fixtures.py --out /out --check

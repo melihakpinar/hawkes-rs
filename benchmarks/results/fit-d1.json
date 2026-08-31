@@ -2,9 +2,9 @@
   "benchmark": "fit_d1",
   "methodology": "benchmarks/README.md",
   "cell_budget_seconds": 1800,
-  "hawk": [
+  "hawkes": [
     {
-      "library": "hawk",
+      "library": "hawkes",
       "dimension": 1,
       "seed": 20260831,
       "warmup": 1,
@@ -49,7 +49,7 @@
       }
     },
     {
-      "library": "hawk",
+      "library": "hawkes",
       "dimension": 1,
       "seed": 20260831,
       "warmup": 1,
@@ -94,7 +94,7 @@
       }
     },
     {
-      "library": "hawk",
+      "library": "hawkes",
       "dimension": 1,
       "seed": 20260831,
       "warmup": 1,
@@ -139,7 +139,7 @@
       }
     },
     {
-      "library": "hawk",
+      "library": "hawkes",
       "dimension": 1,
       "seed": 20260831,
       "warmup": 1,

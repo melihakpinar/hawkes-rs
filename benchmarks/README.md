@@ -12,9 +12,9 @@ structure deliberately.
 
 ## 0. Speed is not this library's claim
 
-The positioning probe measured `tick` at roughly **3x faster** than `hawk` on the
+The positioning probe measured `tick` at roughly **3x faster** than `hawkes` on the
 univariate fit at `n = 1e6`. That result stands, is expected to reproduce here, and is
-reported in the README in the same typeface as everything else. `hawk` exists for
+reported in the README in the same typeface as everything else. `hawkes` exists for
 reasons that are not speed, and they are listed in `CLAUDE.md`.
 
 A benchmark section with no losses in it is marketing. The cases where the incumbent
@@ -42,13 +42,13 @@ estimators.
 | Machine | Apple M2, 8 cores, 16 GiB |
 | Architecture | `arm64`, native on both sides |
 | OS | macOS, Darwin 22.6.0 |
-| `hawk` | this working tree, `cargo build --release` |
+| `hawkes` | this working tree, `cargo build --release` |
 | Python | 3.14.5 |
 | `tick` | 0.8.0.2 |
 | `numpy` / `scipy` | 2.5.2 / 1.18.1 |
 | Threads | 1 on both sides |
 
-`hawk` is single-threaded and has no parallelism on the paths measured here. The `tick`
+`hawkes` is single-threaded and has no parallelism on the paths measured here. The `tick`
 process runs with `OMP_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `MKL_NUM_THREADS`,
 `VECLIB_MAXIMUM_THREADS` and `NUMEXPR_NUM_THREADS` all set to 1; `HawkesExpKern` exposes
 no `n_threads` argument, so the environment is the only control available.
@@ -59,7 +59,7 @@ compared against native ones would measure the emulator.
 
 ## 3. Data
 
-Generated once per configuration by **`hawk`'s** simulator, seeded, written to disk in
+Generated once per configuration by **`hawkes`'s** simulator, seeded, written to disk in
 Rust's shortest-round-trip decimal form, and read back by both sides, so both fit
 exactly the same events. Generation is outside every clock.
 
@@ -89,7 +89,7 @@ event.
 - 1 warmup run, discarded.
 - 5 timed runs.
 - **Median** of the 5 reported, with `[min, max]` of the same 5 so dispersion is visible.
-- `std::time::Instant` on the `hawk` side, `time.perf_counter()` on the `tick` side.
+- `std::time::Instant` on the `hawkes` side, `time.perf_counter()` on the `tick` side.
   Both are monotonic wall clocks.
 - The clock covers the fit or simulate call only.
 
@@ -115,19 +115,19 @@ number for both.
 Recorded rather than adjusted away, because adjusting them would mean measuring
 something other than what each library does.
 
-### 5.1 `tick` does not fit `beta`; `hawk` does
+### 5.1 `tick` does not fit `beta`; `hawkes` does
 
 `HawkesExpKern(decays=...)` takes the decay as a fixed constructor argument. `tick` has
 no exponential-kernel estimator that treats it as free.
 
-- `hawk` solves a `d + d^2 + 1` parameter problem.
+- `hawkes` solves a `d + d^2 + 1` parameter problem.
 - `tick` solves a `d + d^2` problem with `beta` supplied.
 
 `tick` is given the **true** `beta = 1.0`, the most favourable case for it: it is handed
 for free the parameter the other side has to find. These are different optimization
 problems and every time difference includes that.
 
-### 5.2 `tick`'s objective carries an L2 penalty; `hawk`'s does not
+### 5.2 `tick`'s objective carries an L2 penalty; `hawkes`'s does not
 
 `penalty="none"` is not reachable: with `solver="bfgs"` it raises
 `ValueError: BFGS only accepts ProxZero and ProxL2sq for now`, and the other solvers
@@ -137,26 +137,26 @@ is still not literally the same objective.
 
 ### 5.3 The stopping criteria are not the same kind of criterion
 
-| | `hawk` | `tick` |
+| | `hawkes` | `tick` |
 | --- | --- | --- |
 | Solver | L-BFGS (`argmin` 0.11), More-Thuente line search, 7 correction pairs univariate / 10 multivariate | `HawkesExpKern`, `solver="bfgs"` |
 | Space | log-parameter space, objective per event | natural parameters, penalized |
 | Stop | gradient tolerance `1e-10` | `tol = 1e-10` |
 | Iteration cap | 500 univariate, 1000 multivariate | 500 |
 
-> **Correction.** This row first read "500" for `hawk` in both columns. That was wrong:
+> **Correction.** This row first read "500" for `hawkes` in both columns. That was wrong:
 > `univariate::fit` caps at 500 and `multivariate::fit` at 1000
-> (`hawk/src/univariate.rs:719`, `hawk/src/multivariate.rs:1056`). The error was found
+> (`hawkes/src/univariate.rs:719`, `hawkes/src/multivariate.rs:1056`). The error was found
 > while reading the `d = 100` result, and is corrected here rather than quietly. It is a
 > misdescription of existing code, not a setting changed after seeing numbers — no cap
 > was altered, and no measurement moved.
 >
 > The correction-pair count in the row above was wrong the same way, and for the same
-> reason: 7 is the univariate value (`hawk/src/univariate.rs:704`), 10 the multivariate
-> one (`hawk/src/multivariate.rs:1049`). Both errors came from describing `hawk` from the
+> reason: 7 is the univariate value (`hawkes/src/univariate.rs:704`), 10 the multivariate
+> one (`hawkes/src/multivariate.rs:1049`). Both errors came from describing `hawkes` from the
 > univariate code alone.
 
-`hawk` stops on a gradient norm; `tick`'s `tol` feeds its own solver's criterion, which
+`hawkes` stops on a gradient norm; `tick`'s `tol` feeds its own solver's criterion, which
 is not the same quantity. **Times measured under different convergence criteria are not
 directly comparable.** Both are set as tight as their interfaces allow, and what each
 actually achieved is reported.
@@ -183,7 +183,7 @@ with a baseline inflated to 1.69 and 7.39 (`elasticnet`, `l1`).
 At `d = 1` the same likelihood path works with `bfgs` and fails with `agd`.
 
 **Consequence for this benchmark.** At `d > 1` the only working `tick` estimator is
-`gofit="least-squares"`, which is its default and a **different objective**: hawk
+`gofit="least-squares"`, which is its default and a **different objective**: hawkes
 maximizes the likelihood, `tick` minimizes a least-squares contrast. The `d = 10` and
 `d = 100` benchmarks therefore compare two different estimators, not two
 implementations of one. This is stated wherever those numbers appear, and §5.5 is how
@@ -200,7 +200,7 @@ This is a capability finding, not a timing one, and it is reported as such.
 ### 5.5 Putting both answers in one unit
 
 Every benchmark records both libraries' fitted parameters and evaluates **both** under
-`hawk`'s unpenalized negative log-likelihood on the same events. That places two answers
+`hawkes`'s unpenalized negative log-likelihood on the same events. That places two answers
 from two different objectives into one common unit.
 
 It is not a neutral unit. It scores `tick`'s answer with an objective `tick` was not
@@ -216,7 +216,7 @@ Where that happens it is said in place.
 
 Chosen from parameter counts and asymptotic cost, before any timing:
 
-| Benchmark | `d` | parameters (`hawk`) | nominal `n` |
+| Benchmark | `d` | parameters (`hawkes`) | nominal `n` |
 | --- | --- | --- | --- |
 | `fit_d1` | 1 | 3 | 1e3, 1e4, 1e5, 1e6 |
 | `fit_d10` | 10 | 111 | 1e4, 1e5, 1e6 |
@@ -229,7 +229,7 @@ each other.
 `fit_d10` starts at `1e4`: at `1e3` there would be 9 events per parameter and the fit
 would be reporting sampling noise.
 
-`fit_d100` has a single point because it is squeezed from both sides. `hawk`'s gradient
+`fit_d100` has a single point because it is squeezed from both sides. `hawkes`'s gradient
 pass is `O(n * d^2)`, which is `1e4` times the work per event that `d = 1` does, so
 `n = 1e6` does not fit the §4.1 budget. Below `n = 1e5` there are fewer events than the
 10 101 parameters being estimated, so the problem is not identified. One point is what
@@ -251,11 +251,11 @@ regenerates every chart from the committed JSON with no manual step.
 
 ## 8. What these measurements will not establish
 
-- Any parameter set other than the one in §3, or data not from `hawk`'s simulator.
+- Any parameter set other than the one in §3, or data not from `hawkes`'s simulator.
 - Time to a *given accuracy*. Both sides run to their own criteria, different in kind.
 - Scaling in `d` beyond the three values measured, and nothing about `d = 100` scaling
   in `n` at all (§6).
-- The cost of fitting `beta` separately from the rest. `tick` cannot fit it and `hawk`
+- The cost of fitting `beta` separately from the rest. `tick` cannot fit it and `hawkes`
   has no interface to hold it fixed.
 - Statistical properties of either estimator: bias, variance, or efficiency.
 - Anything about `tick` under settings other than those in §5. Its least-squares path is

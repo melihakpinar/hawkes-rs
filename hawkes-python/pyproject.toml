@@ -1,0 +1,38 @@
+[build-system]
+requires = ["maturin>=1.9,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "hawkes-rs"
+version = "0.1.0"
+description = "Multivariate Hawkes processes: simulation and maximum-likelihood estimation"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT OR Apache-2.0" }
+authors = [{ name = "Mesut Melih Akpinar", email = "mesutmelihakpinar@gmail.com" }]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+dependencies = ["numpy>=1.22"]
+
+[project.urls]
+Repository = "https://github.com/melihakpinar/hawkes-rs"
+
+[tool.maturin]
+python-source = "python"
+module-name = "hawkes._hawkes"
+# Passed here rather than declared as a crate feature, so `cargo test` and
+# `cargo clippy --all-features` still link against libpython.
+features = ["pyo3/extension-module"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+strict = true

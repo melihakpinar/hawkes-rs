@@ -1,6 +1,6 @@
 """`tick` side of positioning probe part 2. See docs/positioning-probe.md part 2.
 
-Times one loss_and_grad() on ModelHawkesExpKernLogLik, on the same events the hawk
+Times one loss_and_grad() on ModelHawkesExpKernLogLik, on the same events the hawkes
 side wrote out, and probes the weight-cache behaviour by timing.
 """
 

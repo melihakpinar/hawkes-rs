@@ -1,6 +1,6 @@
 """`tick` side of the M4 fit benchmarks. See benchmarks/README.md.
 
-Reads the events written by the hawk side, so both fit exactly the same data.
+Reads the events written by the hawkes side, so both fit exactly the same data.
 Times the fit call only; loading and construction are outside the clock.
 
 Usage: bench_fit.py <dir> <d> <n,n,...>

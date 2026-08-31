@@ -2,7 +2,7 @@
 
 Evidence for `univariate_loglikelihood.md` §5's statement that the Part B step 7
 comparison gate is RELATIVE and bounded at n <= 50000. Throwaway reference code, not
-`hawk` code: python3, no dependencies.
+`hawkes` code: python3, no dependencies.
 
     python3 docs/derivations/check_summation_scaling.py
 

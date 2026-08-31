@@ -152,13 +152,13 @@ def main(results, out_dir):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     d1 = json.loads((results / "fit-d1.json").read_text())
-    hawk = [(r["events"], r["seconds_median"]) for r in hawk_runs(d1["hawk"]) if r.get("completed")]
+    hawkes = [(r["events"], r["seconds_median"]) for r in hawk_runs(d1["hawkes"]) if r.get("completed")]
     tl = [(r["events"], r["seconds_median"]) for r in tick_runs(d1["tick"])
           if r.get("completed") and r["gofit"] == "likelihood"]
     ts = [(r["events"], r["seconds_median"]) for r in tick_runs(d1["tick"])
           if r.get("completed") and r["gofit"] == "least-squares"]
     log_line_chart(
-        [("hawk, likelihood", HAWK, hawk),
+        [("hawkes, likelihood", HAWK, hawkes),
          ("tick, likelihood", TICK_LIKELIHOOD, tl),
          ("tick, least-squares", TICK_LEASTSQ, ts)],
         "Univariate fit, wall clock (median of 5, log-log)", "seconds",
@@ -170,7 +170,7 @@ def main(results, out_dir):
         if not path.exists():
             continue
         payload = json.loads(path.read_text())
-        h = [r for r in hawk_runs(payload["hawk"]) if r.get("completed")]
+        h = [r for r in hawk_runs(payload["hawkes"]) if r.get("completed")]
         t = tick_runs(payload["tick"])
         tl_ = [r for r in t if r.get("completed") and r.get("gofit") == "likelihood"]
         ts_ = [r for r in t if r.get("completed") and r.get("gofit") == "least-squares"]
@@ -184,7 +184,7 @@ def main(results, out_dir):
     note = ("tick's likelihood objective does not run at " + ", ".join(missing) +
             " (benchmarks/README.md §5.4)") if missing else None
     grouped_bar_chart(
-        groups, ["hawk, likelihood", "tick, likelihood", "tick, least-squares"],
+        groups, ["hawkes, likelihood", "tick, likelihood", "tick, least-squares"],
         [HAWK, TICK_LIKELIHOOD, TICK_LEASTSQ],
         "Fit wall clock by dimension, largest completed n", "seconds",
         out_dir / "fit-by-dimension.svg", note)
@@ -193,7 +193,7 @@ def main(results, out_dir):
     if sim_path.exists():
         sim = json.loads(sim_path.read_text())
         series = []
-        for label, colour, side in (("hawk", HAWK, "hawk"), ("tick", TICK_LIKELIHOOD, "tick")):
+        for label, colour, side in (("hawkes", HAWK, "hawkes"), ("tick", TICK_LIKELIHOOD, "tick")):
             pts = []
             for entry in sim[side]:
                 if entry["dimension"] != 1:

@@ -272,7 +272,7 @@ doc comment states it rather than leaving it to be discovered.
 
 ## 7. What the tests pin
 
-`hawk/tests/spectral_radius.rs`:
+`hawkes/tests/spectral_radius.rs`:
 
 - diagonalizable cases with hand-computed radii, to `1e-9`
 - the reducible/diagonal case of §3.1, which fails if the midpoint is returned

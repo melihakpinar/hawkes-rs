@@ -1,6 +1,6 @@
 {
-  "hawk": {
-    "side": "hawk",
+  "hawkes": {
+    "side": "hawkes",
     "warmup": 1,
     "timed": 5,
     "evaluated_at": {

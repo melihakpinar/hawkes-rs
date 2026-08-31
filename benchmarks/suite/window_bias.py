@@ -1,4 +1,4 @@
-"""`tick` side of the OQ-5 window measurement. See hawk/examples/window_bias.rs.
+"""`tick` side of the OQ-5 window measurement. See hawkes/examples/window_bias.rs.
 
 Every row is the same call on the same events, because `HawkesExpKern.fit` has no
 argument for the observation window. That is the finding: the column is constant by
@@ -27,7 +27,7 @@ TRUE_DECAY = 1.0
 
 def main(work):
     work = pathlib.Path(work)
-    hawk = json.loads((work / "hawk_window_bias.json").read_text())
+    hawkes = json.loads((work / "hawk_window_bias.json").read_text())
     raw = (work / "window_bias_events.txt").read_text().split()
     times = np.array([float(v) for v in raw[3:]], dtype=np.float64)
 
@@ -39,7 +39,7 @@ def main(work):
 
     signature = str(inspect.signature(HawkesExpKern.fit))
     rows = []
-    for row in hawk["rows"]:
+    for row in hawkes["rows"]:
         rows.append({
             "dead_time_fraction": row["dead_time_fraction"],
             "declared_horizon": row["declared_horizon"],
@@ -48,18 +48,18 @@ def main(work):
             "tick_excitation": excitation,
         })
         print(f"  dead_time={row['dead_time_fraction']:5.0%} "
-              f"hawk={row['baseline']:.6f}  tick={baseline:.6f}", file=sys.stderr)
+              f"hawkes={row['baseline']:.6f}  tick={baseline:.6f}", file=sys.stderr)
 
     out = pathlib.Path("benchmarks/results/window-bias.json")
     out.write_text(json.dumps({
         "experiment": "window_bias",
         "question": "OQ-5",
-        "methodology": "hawk/examples/window_bias.rs",
-        "events": hawk["events"],
-        "observed_horizon": hawk["observed_horizon"],
-        "last_event": hawk["last_event"],
-        "true_baseline": hawk["true_baseline"],
-        "true_excitation": hawk["true_excitation"],
+        "methodology": "hawkes/examples/window_bias.rs",
+        "events": hawkes["events"],
+        "observed_horizon": hawkes["observed_horizon"],
+        "last_event": hawkes["last_event"],
+        "true_baseline": hawkes["true_baseline"],
+        "true_excitation": hawkes["true_excitation"],
         "hawkes_exp_kern_fit_signature": signature,
         "note": ("Every tick row is the same call on the same events: HawkesExpKern.fit "
                  "takes no observation window, so its estimate cannot depend on one. "

@@ -58,7 +58,7 @@ them means the binding has an implicit conversion policy, and the next question 
 
 ### Why not accept lists
 
-`hawk.univariate.negative_log_likelihood(params, [1.0, 2.0], 3.0)` would require
+`hawkes.univariate.negative_log_likelihood(params, [1.0, 2.0], 3.0)` would require
 inferring a dtype, and `[1, 2]` infers `int64`, which rule 1 then rejects. A caller
 would see a list of numbers refused for a reason invisible in the source. Array
 arguments take numpy arrays; the error message says so.
@@ -81,13 +81,13 @@ happens.
 ## 3. Memory order of the excitation matrix — logical indexing always wins
 
 A 2-D `excitation` array is accepted in C order or Fortran order. **The value at
-logical position `[i][j]` is always the value `hawk` uses for `alpha[i][j]`.** An
+logical position `[i][j]` is always the value `hawkes` uses for `alpha[i][j]`.** An
 F-ordered array is copied into C order; its buffer is never reinterpreted.
 
 This is the most dangerous case in this document, and the only one where the wrong
 choice is silent and wrong rather than merely surprising.
 
-`hawk` stores `excitation` row-major and reads `excitation[i * d + j]` as "j excites
+`hawkes` stores `excitation` row-major and reads `excitation[i * d + j]` as "j excites
 i" (`conventions.md` C6). Handing Rust the raw buffer of an F-ordered array without
 copying would deliver **the transpose** — a plausible-looking matrix that is wrong,
 and undetectable on symmetric input. It is exactly the failure C6 exists to prevent

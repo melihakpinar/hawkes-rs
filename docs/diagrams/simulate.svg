@@ -26,7 +26,7 @@
 <circle cx="309.3" cy="136.2" r="3.4" fill="#b4622a"/>
 <circle cx="532.2" cy="36.7" r="3.4" fill="#b4622a"/>
 <rect x="564" y="33" width="11" height="11" fill="#2f7d8f" rx="2"/>
-<text x="581" y="42" fill="#8b949e">hawk, d=1</text>
+<text x="581" y="42" fill="#8b949e">hawkes, d=1</text>
 <rect x="564" y="53" width="11" height="11" fill="#b4622a" rx="2"/>
 <text x="581" y="62" fill="#8b949e">tick, d=1</text>
 </svg>

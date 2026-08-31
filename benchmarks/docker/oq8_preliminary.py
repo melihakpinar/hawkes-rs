@@ -8,14 +8,14 @@ definition — brute force, no recursion — and compares:
 
     tick_loss * n_jumps + D*T   ==?   nll
 
-It deliberately does NOT use `hawk`: nothing is implemented yet, and M1 Part B step 9
-closes OQ-8 properly using hawk's own implementation after that implementation has
+It deliberately does NOT use `hawkes`: nothing is implemented yet, and M1 Part B step 9
+closes OQ-8 properly using hawkes's own implementation after that implementation has
 been validated against non-tick oracles. This is evidence gathered ahead of that, to
 find out early whether candidate (a) or (b) is heading for confirmation.
 
     docker run --rm --platform=linux/amd64 \
         -v "$PWD/tests/fixtures":/fx -v "$PWD/benchmarks/docker":/w \
-        hawk-tick:0.8.0.2 python /w/oq8_preliminary.py
+        hawkes-tick:0.8.0.2 python /w/oq8_preliminary.py
 """
 
 import json

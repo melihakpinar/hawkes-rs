@@ -67,7 +67,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.2.0
         with:
-          package-dir: hawk-python
+          package-dir: hawkes-python
         env:
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment_target }}
           CIBW_BUILD: cp39-*
@@ -76,7 +76,7 @@ jobs:
           CIBW_BEFORE_ALL_LINUX: >
             curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
           CIBW_ENVIRONMENT_LINUX: 'PATH="$HOME/.cargo/bin:$PATH"'
-          CIBW_TEST_COMMAND: python -c "import hawk; print(hawk.__version__)"
+          CIBW_TEST_COMMAND: python -c "import hawkes; print(hawkes.__version__)"
           CIBW_TEST_SKIP: ${{ matrix.test_skip }}
 
       - uses: actions/upload-artifact@v4
@@ -129,12 +129,12 @@ jobs:
 
       # No source tree: the tests and the fixture corpus are copied out, and the Rust
       # sources and Cargo manifests are left behind. If anything still resolved
-      # `hawk` from the working directory rather than from the wheel, this would be
+      # `hawkes` from the working directory rather than from the wheel, this would be
       # where it showed.
       - name: Stage tests and fixtures without the sources
         run: |
           mkdir -p /tmp/clean/tests
-          cp -r hawk-python/tests /tmp/clean/
+          cp -r hawkes-python/tests /tmp/clean/
           cp -r tests/fixtures /tmp/clean/fixtures
           ls /tmp/clean
 
@@ -161,21 +161,21 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           # numpy is a real runtime dependency and comes from PyPI as a user's
-          # would. `--no-index` below scopes only where `hawk-hawkes` itself may
+          # would. `--no-index` below scopes only where `hawkes-rs` itself may
           # come from -- it is not published anywhere, so without the flag a typo
           # in the wheel name could be satisfied by something else entirely.
           python -m pip install pytest numpy
-          python -m pip install --no-index --find-links wheelhouse hawk-hawkes
+          python -m pip install --no-index --find-links wheelhouse hawkes-rs
 
       - name: The imported package is the installed one, not the working tree
         working-directory: /tmp/clean
         run: |
           python - <<'PY'
-          import hawk, pathlib, sys
-          location = pathlib.Path(hawk.__file__).resolve()
-          print("hawk imported from", location)
+          import hawkes, pathlib, sys
+          location = pathlib.Path(hawkes.__file__).resolve()
+          print("hawkes imported from", location)
           assert "site-packages" in str(location), location
-          print("version", hawk.__version__)
+          print("version", hawkes.__version__)
           PY
 
       - name: pytest against the installed wheel

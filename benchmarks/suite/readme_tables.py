@@ -54,9 +54,9 @@ def fit_d1(results):
     j = load(results, "fit-d1.json")
     if not j:
         return
-    H, T = hawk_runs(j["hawk"]), tick_runs(j["tick"])
-    print("`benchmarks/results/fit-d1.json`. Seconds; ratio is `hawk / tick`.\n")
-    print("| events | hawk | hawk [min, max] | tick, likelihood | ratio | tick, least-squares | ratio |")
+    H, T = hawk_runs(j["hawkes"]), tick_runs(j["tick"])
+    print("`benchmarks/results/fit-d1.json`. Seconds; ratio is `hawkes / tick`.\n")
+    print("| events | hawkes | hawkes [min, max] | tick, likelihood | ratio | tick, least-squares | ratio |")
     print("| --- | --- | --- | --- | --- | --- | --- |")
     for h in sorted([r for r in H if r.get("completed")], key=lambda r: r["nominal_n"]):
         n = h["nominal_n"]
@@ -64,10 +64,10 @@ def fit_d1(results):
         rl = f"{h['seconds_median'] / tl['seconds_median']:.2f}x" if tl and tl.get("completed") else "—"
         rs = f"{h['seconds_median'] / ts['seconds_median']:.2f}x" if ts and ts.get("completed") else "—"
         print(f"| {h['events']:,} | {secs(h)} | {spread(h)} | {secs(tl)} | {rl} | {secs(ts)} | {rs} |")
-    print("\nBoth answers under `hawk`'s unpenalized negative log-likelihood, "
+    print("\nBoth answers under `hawkes`'s unpenalized negative log-likelihood, "
           "so two objectives sit in one unit. Lower is better; the last two columns are "
           "how much worse `tick`'s answer scores.\n")
-    print("| events | hawk nll | tick, likelihood | tick, least-squares |")
+    print("| events | hawkes nll | tick, likelihood | tick, least-squares |")
     print("| --- | --- | --- | --- |")
     for h in sorted([r for r in H if r.get("completed")], key=lambda r: r["nominal_n"]):
         n = h["nominal_n"]
@@ -82,18 +82,18 @@ def fit_d1(results):
 def fit_by_dimension(results):
     print("`benchmarks/results/fit-d{1,10,100}.json`. The largest `n` each dimension "
           "completed, seconds.\n")
-    print("| d | parameters | events | hawk | tick, likelihood | tick, least-squares |")
+    print("| d | parameters | events | hawkes | tick, likelihood | tick, least-squares |")
     print("| --- | --- | --- | --- | --- | --- |")
     notes = []
     for d in (1, 10, 100):
         j = load(results, f"fit-d{d}.json")
         if not j:
             continue
-        H, T = hawk_runs(j["hawk"]), tick_runs(j["tick"])
+        H, T = hawk_runs(j["hawkes"]), tick_runs(j["tick"])
         done = [r for r in H if r.get("completed")]
         if not done:
             for r in H:
-                notes.append(f"- `d = {d}`, `n = {r['nominal_n']:,}`: hawk **{r.get('abort_reason')}**")
+                notes.append(f"- `d = {d}`, `n = {r['nominal_n']:,}`: hawkes **{r.get('abort_reason')}**")
             continue
         h = max(done, key=lambda r: r["nominal_n"])
         n = h["nominal_n"]
@@ -102,7 +102,7 @@ def fit_by_dimension(results):
         print(f"| {d} | {d + d * d + 1:,} | {h['events']:,} | {secs(h)} | {tl_cell} | {secs(ts)} |")
         for r in H:
             if not r.get("completed"):
-                notes.append(f"- `d = {d}`, `n = {r['nominal_n']:,}`: hawk **{r.get('abort_reason')}**")
+                notes.append(f"- `d = {d}`, `n = {r['nominal_n']:,}`: hawkes **{r.get('abort_reason')}**")
         for r in T:
             if not r.get("completed") and r.get("gofit") == "least-squares":
                 notes.append(f"- `d = {d}`, `n = {r['nominal_n']:,}`: tick least-squares "
@@ -119,9 +119,9 @@ def simulate(results):
         return
     print("`benchmarks/results/simulate.json`. One realization to a fixed horizon. The "
           "two use different generators, so the realized counts differ; both are shown.\n")
-    print("| d | hawk events | hawk | tick events | tick | tick / hawk |")
+    print("| d | hawkes events | hawkes | tick events | tick | tick / hawkes |")
     print("| --- | --- | --- | --- | --- | --- |")
-    for he, te in zip(j["hawk"], j["tick"]):
+    for he, te in zip(j["hawkes"], j["tick"]):
         for hr, tr in zip(he["runs"], te["runs"]):
             if hr.get("completed") and tr.get("completed"):
                 ratio = tr["seconds_median"] / hr["seconds_median"]
@@ -135,7 +135,7 @@ def window(results):
         return
     print(f"One realization of {j['events']:,} events, true baseline "
           f"`{j['true_baseline']}`. Only the declared window changes.\n")
-    print("| dead time | declared horizon | hawk baseline | tick baseline |")
+    print("| dead time | declared horizon | hawkes baseline | tick baseline |")
     print("| --- | --- | --- | --- |")
     for r in j["rows"]:
         print(f"| {r['dead_time_fraction']:.0%} | {r['declared_horizon']:,.0f} "

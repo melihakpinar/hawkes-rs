@@ -36,9 +36,9 @@ lambda*_i(t) = lambda_i + sum_{j=1}^{m} sum_{t_{j,k} < t} alpha_L[i][j] * exp(-b
 
 Two differences from what is coded, both carried forward from M1 §1.1:
 
-- **Kernel normalization.** `hawk` uses `alpha[i][j] * beta * exp(-beta t)`
+- **Kernel normalization.** `hawkes` uses `alpha[i][j] * beta * exp(-beta t)`
   (`conventions.md` C1), so `alpha_L[i][j] = alpha[i][j] * beta`.
-- **A single decay.** [Laub2015] allows a full matrix `beta[i][j]`. `hawk` uses one
+- **A single decay.** [Laub2015] allows a full matrix `beta[i][j]`. `hawkes` uses one
   scalar `beta` shared by every pair, matching `tick`'s
   `ModelHawkesExpKernLogLik(decay: float)`, which takes a scalar and is the differential
   oracle. A per-pair decay matrix is **out of scope**: nothing in the corpus or in
@@ -398,7 +398,7 @@ Lambda = (1/0.735) * [[0.85, 0.6], [0.05, 0.9]] * [0.2, 0.5]
 ## 9. Numerical check run during Part A
 
 `docs/derivations/check_multivariate_derivation.py` — throwaway Python, no
-dependencies, **not** `hawk` code.
+dependencies, **not** `hawkes` code.
 
 ```
 1. recursion (M4.6) vs definition (M3.2), worst relative : 2.122e-14

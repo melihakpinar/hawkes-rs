@@ -1,7 +1,7 @@
 """Emit reference fixtures from the pinned `tick` oracle.
 
 Each fixture records a simulated Hawkes realization together with the values `tick`
-reports for it. Rust's differential test (hawk/tests/differential_tick.rs) replays
+reports for it. Rust's differential test (hawkes/tests/differential_tick.rs) replays
 these and must agree.
 
 Determinism: every scenario fixes the simulator seed, and the JSON is written with
@@ -13,7 +13,7 @@ docs/derivations/conventions.md.
 
 Run with:
     docker run --rm --platform=linux/amd64 -v "$PWD/tests/fixtures":/out \
-        hawk-tick:0.8.0.2 python /work/generate_fixtures.py --out /out
+        hawkes-tick:0.8.0.2 python /work/generate_fixtures.py --out /out
 """
 
 import argparse
@@ -132,7 +132,7 @@ def circulant_scenario():
 #
 # Their purpose is to give the grouped recursion an INDEPENDENT witness. Without them
 # the tie handling in docs/derivations/univariate_loglikelihood.md §4.2 is checked
-# only against hawk's own brute force, and both come from the same derivation and the
+# only against hawkes's own brute force, and both come from the same derivation and the
 # same author. tick is a third party that agrees with neither by construction.
 #
 # tick resolves a tie by time rather than by array index, so the OQ-8 identity holds
@@ -304,7 +304,7 @@ def build(scenario):
         # 32667239095 (pass). Nothing else in a fixture touches BLAS -- the events and
         # tick's loss and gradient are C++ loops with n_threads = 1.
         #
-        # The Rust side computes it with hawk's own routine instead, which is pure f64
+        # The Rust side computes it with hawkes's own routine instead, which is pure f64
         # arithmetic and deterministic, and which `spectral_radius.rs` pins.
         "n_nodes": int(n_nodes),
         "decay": decay,

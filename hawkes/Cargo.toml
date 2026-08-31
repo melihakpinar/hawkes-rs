@@ -1,0 +1,44 @@
+[package]
+name = "hawkes-rs"
+description = "Multivariate Hawkes processes: simulation and maximum-likelihood estimation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+name = "hawkes"
+
+[dependencies]
+thiserror.workspace = true
+rand.workspace = true
+rand_distr.workspace = true
+argmin-math = { version = "0.5.1", features = ["vec"] }
+argmin = { version = "0.11", default-features = false }
+rayon = { workspace = true, optional = true }
+
+[features]
+# Parallelises the per-component work across components. Off by default: see
+# `negative_log_likelihood_parallel` for what it does and does not buy.
+rayon = ["dep:rayon"]
+
+[dev-dependencies]
+proptest.workspace = true
+rand_chacha.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[[example]]
+name = "parallel_probe"
+required-features = ["rayon"]
+
+# The fixture-nll dumper needs serde to read the fixtures, which is a dev-dependency,
+# so the example is marked as requiring the dev profile's deps.
+[[example]]
+name = "dump_fixture_nll"
+
+
+
+

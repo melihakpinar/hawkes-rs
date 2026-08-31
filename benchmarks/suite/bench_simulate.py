@@ -1,6 +1,6 @@
 """`tick` side of the M4 simulate benchmark. See benchmarks/README.md.
 
-Same parameters and same horizon as the hawk side, so the expected event count
+Same parameters and same horizon as the hawkes side, so the expected event count
 matches. The realized count differs because the two use different random number
 generators; both counts are reported and the comparison is per event.
 

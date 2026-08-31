@@ -22,7 +22,7 @@ recursion), eq. 21 (`O(n)` form), Theorem 4 (random time change), Algorithm 2 (O
 thinning).
 
 **Note the parametrization.** [Laub2015, eq. 4] uses `alpha_L * exp(-beta t)` while
-`hawk` and `tick` use `alpha * beta * exp(-beta t)`. The map is
+`hawkes` and `tick` use `alpha * beta * exp(-beta t)`. The map is
 `alpha_L = alpha * beta`. See `docs/derivations/conventions.md` C1 and
 `univariate_loglikelihood.md` §1.1 — getting it backwards makes every downstream
 equation wrong by a factor of `beta`.

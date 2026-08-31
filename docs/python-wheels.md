@@ -11,7 +11,7 @@ platform is compiled against the 3.9 stable ABI and loaded by every later interp
 so the matrix is over **platforms**, not over CPython versions.
 
 That claim is checked rather than inferred from the filename. Locally, the wheel
-`hawk_hawkes-0.1.0-cp39-abi3-macosx_11_0_arm64.whl` was installed into a CPython
+`hawkes_rs-0.1.0-cp39-abi3-macosx_11_0_arm64.whl` was installed into a CPython
 **3.14** environment and the full test suite passed — a five-version span on one build.
 `.github/workflows/wheels.yml` repeats that on Linux across 3.9 to 3.13.
 
@@ -21,14 +21,14 @@ That claim is checked rather than inferred from the filename. Locally, the wheel
 | --- | --- |
 | Platform | macOS 14, Apple M2, `macosx_11_0_arm64` |
 | Built by | `maturin build --release` |
-| Wheel | `hawk_hawkes-0.1.0-cp39-abi3-macosx_11_0_arm64.whl` |
+| Wheel | `hawkes_rs-0.1.0-cp39-abi3-macosx_11_0_arm64.whl` |
 | Installed into | a fresh venv running CPython 3.14.5 |
 | Rust toolchain present | no — `PATH` reduced to `/usr/bin:/bin` |
 | Source tree present | no — only `tests/` and the fixture corpus were staged |
-| Result | 38 tests passed, `hawk` imported from `site-packages` |
+| Result | 38 tests passed, `hawkes` imported from `site-packages` |
 
 The import location is asserted by the test run, not eyeballed: if anything resolved
-`hawk` from the working directory the assertion fails.
+`hawkes` from the working directory the assertion fails.
 
 ## Verified in CI
 
@@ -47,8 +47,8 @@ each in an environment with no Rust toolchain and with the sources removed, and 
 `pytest` against it.
 
 All five build legs and all five interpreters are green as of run
-[32772566244](https://github.com/melihakpinar/hawk/actions/runs/32772566244): **38
-tests passed on each interpreter**, with `hawk` asserted to resolve from
+[32772566244](https://github.com/melihakpinar/hawkes-rs/actions/runs/32772566244): **38
+tests passed on each interpreter**, with `hawkes` asserted to resolve from
 `site-packages`. One `cp39-abi3` build served 3.9 through 3.13 — the span the abi3
 claim rests on, now measured rather than inferred from the wheel tag.
 
@@ -62,7 +62,7 @@ job had not been testing what it said:
   before the guard runs, rather than the guard being relaxed to accommodate it. Without
   that, "installs with no Rust toolchain" would have been an untested sentence.
 - **`--no-index` also cut off `numpy`.** The flag is meant to scope where
-  `hawk-hawkes` may come from, since it is published nowhere and a typo in the wheel
+  `hawkes-rs` may come from, since it is published nowhere and a typo in the wheel
   name should not be satisfiable from PyPI. It is not meant to block a declared runtime
   dependency, which a real user does fetch from an index.
 
@@ -91,7 +91,7 @@ which is why that column exists.
 
 ## Bit-for-bit results do not travel between platforms
 
-`hawk`'s likelihood is built from `exp`, `ln` and `exp_m1`, which IEEE-754 does **not**
+`hawkes`'s likelihood is built from `exp`, `ln` and `exp_m1`, which IEEE-754 does **not**
 require to be correctly rounded and which differ in the last bits between libm
 implementations. Two machines running the same wheel version can disagree by an ulp.
 
@@ -109,5 +109,5 @@ and how FMA contraction was ruled out as the cause.
   unverified claim this file exists to avoid.
 - **PyPy** is not built. `pyo3`'s `abi3` wheels do not apply to it, and it has not been
   tested.
-- **Publishing.** Nothing is uploaded to PyPI. The package name `hawk-hawkes` is
+- **Publishing.** Nothing is uploaded to PyPI. The package name `hawkes-rs` is
   reserved in `pyproject.toml` only in the sense of being written down.

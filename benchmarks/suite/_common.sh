@@ -55,13 +55,13 @@ bench_fit() {
     "$VENV/bin/python" - "$WORK" "$d" "$grid" "$ROOT/benchmarks/results/fit-d$d.json" <<'PY'
 import json, pathlib, sys
 work, d, grid, out = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3], pathlib.Path(sys.argv[4])
-hawk, tick = [], []
+hawkes, tick = [], []
 for n in grid.split(","):
     hp, tp = work / f"hawk_d{d}_n{n}.json", work / f"tick_d{d}_n{n}.json"
     if hp.exists():
-        hawk.append(json.loads(hp.read_text()))
+        hawkes.append(json.loads(hp.read_text()))
     else:
-        hawk.append({"library": "hawk", "dimension": int(d),
+        hawkes.append({"library": "hawkes", "dimension": int(d),
                      "run": {"dimension": int(d), "nominal_n": int(n), "completed": False,
                              "abort_reason": "process killed at the cell budget"}})
     if tp.exists():
@@ -73,7 +73,7 @@ for n in grid.split(","):
 out.write_text(json.dumps({"benchmark": f"fit_d{d}",
                            "methodology": "benchmarks/README.md",
                            "cell_budget_seconds": 1800,
-                           "hawk": hawk, "tick": tick}, indent=2) + "\n")
+                           "hawkes": hawkes, "tick": tick}, indent=2) + "\n")
 print(f"wrote {out}", file=sys.stderr)
 PY
 }
@@ -83,7 +83,7 @@ bench_simulate() {
     grid=$1; shift
     bench_setup
     for d in "$@"; do
-        echo "=== hawk simulate, d=$d ===" >&2
+        echo "=== hawkes simulate, d=$d ===" >&2
         "$ROOT/target/release/examples/bench_simulate" "$WORK" "$d" "$grid"
         echo "=== tick simulate, d=$d ===" >&2
         "$VENV/bin/python" "$ROOT/benchmarks/suite/bench_simulate.py" "$WORK" "$d" "$grid"
@@ -92,7 +92,7 @@ bench_simulate() {
 import json, pathlib, sys
 work, out, dims = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), sys.argv[3:]
 payload = {"benchmark": "simulate", "methodology": "benchmarks/README.md",
-           "hawk": [json.loads((work / f"hawk_simulate_d{d}.json").read_text()) for d in dims],
+           "hawkes": [json.loads((work / f"hawk_simulate_d{d}.json").read_text()) for d in dims],
            "tick": [json.loads((work / f"tick_simulate_d{d}.json").read_text()) for d in dims]}
 out.write_text(json.dumps(payload, indent=2) + "\n")
 print(f"wrote {out}", file=sys.stderr)

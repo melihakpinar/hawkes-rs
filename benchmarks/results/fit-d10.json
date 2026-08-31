@@ -2,9 +2,9 @@
   "benchmark": "fit_d10",
   "methodology": "benchmarks/README.md",
   "cell_budget_seconds": 1800,
-  "hawk": [
+  "hawkes": [
     {
-      "library": "hawk",
+      "library": "hawkes",
       "dimension": 10,
       "seed": 20260831,
       "warmup": 1,
@@ -265,7 +265,7 @@
       }
     },
     {
-      "library": "hawk",
+      "library": "hawkes",
       "dimension": 10,
       "seed": 20260831,
       "warmup": 1,
@@ -526,7 +526,7 @@
       }
     },
     {
-      "library": "hawk",
+      "library": "hawkes",
       "dimension": 10,
       "seed": 20260831,
       "warmup": 1,
