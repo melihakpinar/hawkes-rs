@@ -5,6 +5,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-08-31
+
+**Metadata only. No code changed.** `hawkes/src` and `hawkes-python/src` are byte for byte
+identical to 0.1.0; this release exists to correct what the registries display.
+
+crates.io and PyPI embed the README as it stood at publish time, and 0.1.0 was published
+before the post-release README edits. Both pages therefore still tell a reader that
+"Neither package is published yet" and hand them `cargo add --git …` and a wheel built from
+a checkout — their own installation instructions are wrong, and no amount of editing the
+repository fixes a page that was snapshotted at upload.
+
+- README rewritten: install instructions that work, the hook stated as the observation
+  window rather than a speed claim, and the speed losses named in the second paragraph.
+- Version bumped in `Cargo.toml` and `hawkes-python/pyproject.toml`.
+
+Published from CI. This is also the first release where
+`.github/scripts/verify_pypi_release.py` runs against a real upload: all six files are new
+at 0.1.1, so nothing is skipped and the check has something to confirm rather than a
+release that was already complete before it ran.
+
 ## [0.1.0] — 2026-08-31
 
 First release. Univariate and multivariate exponential-kernel Hawkes processes:
