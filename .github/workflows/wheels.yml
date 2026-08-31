@@ -279,3 +279,36 @@ jobs:
       # docs/verification-log.md.
       - name: Verify the release is on PyPI
         run: python .github/scripts/verify_pypi_release.py hawkes-rs dist
+
+      # crates.io was published by hand for 0.1.0 and 0.1.1, which is exactly the step
+      # that gets skipped: it is separate from the wheel pipeline and nothing failed
+      # when it was missed. It goes in the same tag-triggered job so it cannot be.
+      - name: Read the version from the manifest
+        id: crate_version
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | python -c \
+            "import json,sys; print(next(p['version'] for p in json.load(sys.stdin)['packages'] if p['name']=='hawkes-rs'))")
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+          echo "manifest says $version"
+
+      # `cargo publish` has no --skip-existing and fails on a version already there, so
+      # re-pushing a tag would turn the job red for the wrong reason. Ask crates.io
+      # first. If the query fails the answer is "not published", and the publish below
+      # fails loudly rather than a duplicate slipping through silently.
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          version='${{ steps.crate_version.outputs.value }}'
+          if python .github/scripts/verify_crates_release.py hawkes-rs "$version" --check-only; then
+            echo "hawkes-rs $version is already on crates.io; nothing to publish"
+          else
+            cargo publish -p hawkes-rs
+          fi
+
+      # Same reasoning as the PyPI check: whether the step above published or skipped,
+      # its exit code is not evidence the version is live. This asserts it against the
+      # crates.io API and fails if the version is absent, yanked, or not max_version.
+      # Sabotage is recorded in docs/verification-log.md.
+      - name: Verify the release is on crates.io
+        run: python .github/scripts/verify_crates_release.py hawkes-rs '${{ steps.crate_version.outputs.value }}'
