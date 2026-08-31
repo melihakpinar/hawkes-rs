@@ -1,5 +1,5 @@
 {
-  "what": "hawk multivariate negative_log_likelihood, rayon across components vs sequential",
+  "what": "hawkes multivariate negative_log_likelihood, rayon across components vs sequential",
   "machine": "Apple M2, 8 cores, macOS",
   "build": "cargo run --release --features rayon --example parallel_probe",
   "protocol": "median of 5 after 1 warmup, wall clock, seconds",

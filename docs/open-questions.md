@@ -114,7 +114,7 @@ Note for M1: `tick`'s *learner* (`HawkesExpKern.fit`) exposes no `end_times`
 parameter at all, so it always uses the inferred window and its baseline estimates
 are biased upward whenever the window has trailing dead time. Any benchmark
 comparing baseline recovery against `HawkesExpKern` must account for this rather
-than treat it as a `hawk` defect. Recorded as conventions.md C5.
+than treat it as a `hawkes` defect. Recorded as conventions.md C5.
 
 ---
 
@@ -171,8 +171,8 @@ Also observed: cross-component ties accepted, empty components accepted, timesta
 at exactly `0.0` and exactly `T` accepted, timestamps beyond `T` rejected with a
 clear error.
 
-**`hawk`'s input contract** is stated in `docs/derivations/conventions.md` C8. It
-differs from `tick` in one deliberate place: `hawk` **rejects** unsorted input rather
+**`hawkes`'s input contract** is stated in `docs/derivations/conventions.md` C8. It
+differs from `tick` in one deliberate place: `hawkes` **rejects** unsorted input rather
 than silently computing the wrong answer.
 
 **Consequence for the implementation.** Admitting ties makes the textbook Ozaki
@@ -208,7 +208,7 @@ Does the `-D*T` offset remain exactly `-D*T` when `adjacency != 0`?
 (b) No — the offset also absorbs something excitation-dependent, and the ratio
     interpretation is a coincidence of the Poisson case.
 
-**Observable difference.** Under (a) a correct `hawk` negative log-likelihood
+**Observable difference.** Under (a) a correct `hawkes` negative log-likelihood
 satisfies `hawk_nll == tick_loss * n_jumps + D*T` for every fixture. Under (b) that
 identity fails on the fixtures with `adjacency != 0` while still holding at
 `adjacency == 0`.
@@ -220,7 +220,7 @@ algorithm code).
 
 **Preliminary evidence (M1 Part A) — candidate (a).** `benchmarks/docker/oq8_preliminary.py`
 evaluates the multivariate negative log-likelihood directly from the definition, in
-Python, using no `hawk` code, and tests
+Python, using no `hawkes` code, and tests
 
 ```
 tick_loss * n_jumps + D*T  ==  nll
@@ -238,7 +238,7 @@ means the difference between the two is constant in the parameters.
 **Ties do not break it.** Checked separately
 (`benchmarks/docker/tie_identity.py`), because if `tick` resolved ties by array index
 — the textbook recursion — the identity would necessarily fail on tied data and the
-failure would not be a defect. `tick` resolves them by time, matching `hawk`'s grouped
+failure would not be a defect. `tick` resolves them by time, matching `hawkes`'s grouped
 recursion, and the identity holds to `<= 1.8e-15` on a tied pair, a triple tie, ties at
 both window ends, and a cross-component tie. Index-based semantics would have been off
 by `0.39` to `1.05` on the same data, so the check discriminates.
@@ -254,18 +254,18 @@ assumption is the natural one and would send someone hunting in the wrong place.
 hawk_nll == tick_loss * n_jumps + D*T
 ```
 
-holds exactly. `hawk/tests/differential_tick.rs` now runs `hawk`'s own
+holds exactly. `hawkes/tests/differential_tick.rs` now runs `hawkes`'s own
 log-likelihood against every univariate fixture at every recorded parameter point,
 and asserts the identity to `1e-9` relative to the computation scale. The test
 additionally requires at least 15 of the compared points to have `alpha != 0` and at
 least 8 to contain ties, so it cannot pass on the degenerate cases alone — which is
 precisely what left this question open in M0.
 
-**The argument is not circular.** `hawk`'s likelihood was gated first against a
+**The argument is not circular.** `hawkes`'s likelihood was gated first against a
 brute-force transcription of the definition, which was itself validated against hand
 calculations and the Poisson closed form, neither of which involves `tick`. Only then
 was `tick` brought in. Had the order been reversed, `tick` would have been used to
-decide what `hawk` computes and `hawk` used to decide what `tick` computes.
+decide what `hawkes` computes and `hawkes` used to decide what `tick` computes.
 
 **Sabotage (S22).** Dropping the `D*T` term turns the test red by exactly `2000.0` on
 `univariate_large`, whose horizon is 2000 — the offset is not a fitted constant, it is
@@ -374,7 +374,7 @@ which §2 now explicitly permits; everything credited to it is reproduced in
 **Two things the paper changed, neither of them cosmetic.**
 
 1. **[Laub2015] is in a different parametrization from `tick`.** Eq. 4 uses
-   `alpha_L*exp(-beta t)`; `tick` and `hawk` use `alpha*beta*exp(-beta t)`. The map is
+   `alpha_L*exp(-beta t)`; `tick` and `hawkes` use `alpha*beta*exp(-beta t)`. The map is
    `alpha_L = alpha*beta`. This is the CLAUDE.md §1.3 kernel-normalization hazard
    appearing as an actual disagreement between two sources rather than a hypothetical
    one. Recorded in `conventions.md` C1 and `univariate_loglikelihood.md` §1.1, and

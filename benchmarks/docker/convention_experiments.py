@@ -2,7 +2,7 @@
 
 Run inside the pinned oracle image:
 
-    docker run --rm --platform=linux/amd64 hawk-tick:0.8.0.2 \
+    docker run --rm --platform=linux/amd64 hawkes-tick:0.8.0.2 \
         python /work/convention_experiments.py
 
 Everything printed here is evidence cited by docs/derivations/conventions.md. The

@@ -32,7 +32,7 @@ Source paths are relative to `site-packages/tick` in the pinned image
 > alpha_Laub = alpha_tick * beta          alpha_tick = alpha_Laub / beta
 > ```
 >
-> **`hawk` uses `tick`'s parametrization.** CLAUDE.md §2 makes `tick`'s source the
+> **`hawkes` uses `tick`'s parametrization.** CLAUDE.md §2 makes `tick`'s source the
 > tiebreaker for conventions, because differential tests against it are the strongest
 > oracle available, and matching it means the differential test compares numbers
 > directly rather than through a reparametrization that could itself be wrong.
@@ -125,7 +125,7 @@ with `tick`.
 E[lambda*(t)] -> lambda / (1 - n)   as t -> infinity
 ```
 
-which in `hawk`'s parametrization is `mu / (1 - alpha)`. This is CLAUDE.md §3's
+which in `hawkes`'s parametrization is `mu / (1 - alpha)`. This is CLAUDE.md §3's
 oracle 1 and is the analytic identity long simulations must converge to.
 
 Confirmed empirically: `SimuHawkesExpKernels(adjacency=[[0.2]], decays=[[1.5]], ...)`
@@ -182,7 +182,7 @@ But eq. 18-21, the ones that get transcribed, are written for the horizon `t_k` 
 *last event* — because §4.2 derives them for a process "observed up to the time of the
 kth arrival". Taking eq. 21 at face value for a caller-supplied `T > t_k` silently
 drops `int_{t_k}^{T} lambda*(u) du`, which is exactly the error this hazard names.
-`hawk` uses the general-`T` form; see `univariate_loglikelihood.md` §2.
+`hawkes` uses the general-`T` form; see `univariate_loglikelihood.md` §2.
 
 Empirically pinned. With `adjacency == 0` the intensity is constant at `mu_i`, so the
 compensator term is linear in `mu_i` with slope equal to the integration length. The
@@ -283,7 +283,7 @@ log-likelihood comparison against `tick` is trusted.
 
 ---
 
-## C8. Event ordering, exact ties, and `hawk`'s input contract
+## C8. Event ordering, exact ties, and `hawkes`'s input contract
 
 Settled by experiment E3 in `benchmarks/docker/convention_experiments.py`. This
 closes OQ-7.
@@ -326,12 +326,12 @@ accepted; a timestamp beyond `T` is rejected with
 RuntimeError: Provided end_time (3) is smaller than last time of component 0 (4)
 ```
 
-### `hawk`'s input contract
+### `hawkes`'s input contract
 
-`tick`'s behaviour constrains the *mathematics*; it does not oblige `hawk` to copy
+`tick`'s behaviour constrains the *mathematics*; it does not oblige `hawkes` to copy
 `tick`'s error handling. Where the two differ below, the reason is given.
 
-1. **Timestamps must be sorted ascending within each component.** `hawk` **rejects**
+1. **Timestamps must be sorted ascending within each component.** `hawkes` **rejects**
    unsorted input with an error rather than silently computing the wrong answer as
    `tick` does. CLAUDE.md §5 requires invalid input to be an error value, and the
    experiment above is the argument for treating unsorted input as invalid rather
@@ -345,7 +345,7 @@ RuntimeError: Provided end_time (3) is smaller than last time of component 0 (4)
 
 3. **Exact ties are accepted**, within a component and across components, and are
    evaluated under C3: an event never contributes to the intensity at its own time,
-   nor to that of any simultaneous event. `hawk` matches `tick` here because the
+   nor to that of any simultaneous event. `hawkes` matches `tick` here because the
    convention is forced by C3 rather than chosen, and because tied timestamps are
    common in real data as an artifact of finite clock resolution. A tie means the
    recursion must group by *distinct* time — see

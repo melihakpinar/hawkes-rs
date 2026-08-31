@@ -43,7 +43,7 @@ every equation below wrong by a factor of `beta`.
 lambda*(t) = lambda + sum_{t_i < t} alpha_L * exp(-beta*(t - t_i))
 ```
 
-`hawk` uses `tick`'s parametrization (`conventions.md` C1), in which the kernel is
+`hawkes` uses `tick`'s parametrization (`conventions.md` C1), in which the kernel is
 `alpha*beta*exp(-beta t)`. So throughout this document:
 
 ```
@@ -61,7 +61,7 @@ substitution is the right way round.
 
 Eq. 18-21 are derived in [Laub2015] §4.2 for a process *observed up to the last
 arrival*, so their horizon is `t_k`, not `T`. Theorem 3 is the general statement with
-`[0, T]`. `hawk` takes `T` from the caller and never infers it (C5), so §2-§4 below
+`[0, T]`. `hawkes` takes `T` from the caller and never infers it (C5), so §2-§4 below
 carry `T` throughout. Setting `T = t_n` recovers Laub's form.
 
 Transcribing eq. 21 literally with a caller-supplied `T > t_n` would silently drop
@@ -155,7 +155,7 @@ Taking logarithms, and using `Lambda(T) = int_0^T lambda*(u) du` — this is
 log L = sum_{k=1}^{n} log lambda(t_k) - Lambda(T)                          (3.1)
 ```
 
-`hawk` minimizes the **negative** log-likelihood:
+`hawkes` minimizes the **negative** log-likelihood:
 
 ```
 nll = Lambda(T) - sum_{k=1}^{n} log lambda(t_k)                            (3.2)
@@ -179,7 +179,7 @@ multiple arrivals cannot occur at the same time"* — to set `F*(t_k) = 0` and o
 eq. 14.
 
 In a simple point process the probability of two simultaneous arrivals is zero. So on
-data containing exact ties, which `hawk`'s input contract admits (C8), (3.3) is **not
+data containing exact ties, which `hawkes`'s input contract admits (C8), (3.3) is **not
 a likelihood**. It is a formal extension of one: the expression still evaluates, the
 intensity path is still well defined, and it still agrees with `tick` (see §7), but
 it is no longer the density of anything the model can generate.
@@ -191,7 +191,7 @@ must not be discovered later:
   asymptotic normality and efficiency — proved for this estimator by Ogata, per
   [Laub2015] §4.3 — are results about the likelihood of a simple point process. On
   tied data the estimator is still a well-defined M-estimator, and it is not a
-  maximum-likelihood estimator in the sense those theorems require. `hawk` must not
+  maximum-likelihood estimator in the sense those theorems require. `hawkes` must not
   advertise MLE asymptotics for tied input.
 - **The round-trip property test (Part B step 10) must not generate ties.** Parameters
   are not recoverable from data the model assigns probability zero to, so a tie-
@@ -248,7 +248,7 @@ carrying its hypothesis across.
 
 If `t_k = t_{k-1}` then
 `exp(0) = 1` and (4.2) yields `A_k = 1 + A_{k-1}`, which counts `t_{k-1}` as
-exciting `t_k`. C3 and experiment E3b say it must not. Since `hawk`'s input contract
+exciting `t_k`. C3 and experiment E3b say it must not. Since `hawkes`'s input contract
 admits ties (C8), (4.2) cannot be the expression that gets coded.
 
 ### 4.2 The recursion that is correct with ties
@@ -468,7 +468,7 @@ Consequences for the gate:
    `nll == tick_loss * n_jumps + D*T` (OQ-8). Preliminary evidence gathered in Part A
    confirms it holds at machine precision on all six committed fixtures across all 24
    parameter points, 18 of which have `alpha != 0`; Part B step 9 confirms it with
-   `hawk`'s own implementation.
+   `hawkes`'s own implementation.
 
    **The identity also survives exact ties**, which was not obvious and was checked
    rather than assumed (`benchmarks/docker/tie_identity.py`). The concern was that
@@ -499,7 +499,7 @@ Consequences for the gate:
 The expressions above were checked before being handed over, so that what is being
 approved is known-consistent rather than merely plausible. The script is
 `docs/derivations/check_univariate_derivation.py` — a throwaway reference
-implementation in Python, deliberately **not** `hawk` code, run with `python3` and no
+implementation in Python, deliberately **not** `hawkes` code, run with `python3` and no
 dependencies.
 
 454 cases: 300 with randomized distinct timestamps (`n` from 0 to 40), 150
@@ -530,7 +530,7 @@ Part B step 7 must meet.
 | grouped recursion (4.5) | 5.961059318008664 |
 | textbook recursion (4.2) | 5.406576697862245 |
 
-The textbook form is wrong by about 9%, silently, on input `hawk`'s contract accepts.
+The textbook form is wrong by about 9%, silently, on input `hawkes`'s contract accepts.
 This is the concrete justification for §4.2 and for C8's decision to admit ties.
 
 This check does **not** replace Part B. It is Python, it is not sabotage-tested, and

@@ -28,7 +28,7 @@ a derivation.
 ## Verification
 
 No estimator lands without an oracle that could have caught it being wrong. Adding a
-feature means adding to the oracles in `hawk/tests/`.
+feature means adding to the oracles in `hawkes/tests/`.
 
 **Sabotage rule.** When you add an oracle, prove it works: deliberately break the
 code it guards, confirm the test goes red, revert, and record it in
@@ -61,7 +61,7 @@ fails and you cannot fix it, leave it failing and say so.
   branchless and never issueless.
 - [Conventional Commits](https://www.conventionalcommits.org/): `feat`, `fix`,
   `test`, `docs`, `refactor`, `perf`, `chore`, `ci`. Scopes are crate or module
-  names: `hawk`, `hawk-python`, `bench`, `fixtures`.
+  names: `hawkes`, `hawkes-python`, `bench`, `fixtures`.
 - Summary under 72 characters, body wrapped at 72, explaining *why*. A commit
   encoding a convention decision must cite the source that settled it — the log is
   part of the audit trail.

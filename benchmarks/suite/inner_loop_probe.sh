@@ -17,7 +17,7 @@ fi
 mkdir -p "$WORK"
 cargo build --release --examples --manifest-path "$ROOT/Cargo.toml"
 
-echo "=== hawk ===" >&2
+echo "=== hawkes ===" >&2
 "$ROOT/target/release/examples/inner_loop_probe" "$WORK"
 echo "=== tick ===" >&2
 "$VENV/bin/python" "$ROOT/benchmarks/suite/inner_loop_probe.py" "$WORK"
@@ -27,7 +27,7 @@ mkdir -p "$ROOT/benchmarks/results"
 import json, pathlib, sys
 work, out = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 out.write_text(json.dumps({
-    "hawk": json.loads((work / "hawk_inner.json").read_text()),
+    "hawkes": json.loads((work / "hawk_inner.json").read_text()),
     "tick": json.loads((work / "tick_inner.json").read_text()),
 }, indent=2) + "\n")
 print(f"wrote {out}", file=sys.stderr)

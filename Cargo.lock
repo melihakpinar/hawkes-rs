@@ -178,7 +178,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "hawk"
+name = "hawkes-python"
+version = "0.1.0"
+dependencies = [
+ "hawkes-rs",
+ "numpy",
+ "pyo3",
+ "rand",
+ "rand_chacha",
+]
+
+[[package]]
+name = "hawkes-rs"
 version = "0.1.0"
 dependencies = [
  "argmin",
@@ -191,17 +202,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
-]
-
-[[package]]
-name = "hawk-python"
-version = "0.1.0"
-dependencies = [
- "hawk",
- "numpy",
- "pyo3",
- "rand",
- "rand_chacha",
 ]
 
 [[package]]

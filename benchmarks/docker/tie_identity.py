@@ -8,7 +8,7 @@ seeing which one `tick` agrees with.
 Evidence for conventions.md C8 and open-questions.md OQ-8.
 
     docker run --rm --platform=linux/amd64 -v "$PWD/benchmarks/docker":/w \
-        hawk-tick:0.8.0.2 python /w/tie_identity.py
+        hawkes-tick:0.8.0.2 python /w/tie_identity.py
 """
 import numpy as np
 from tick.hawkes import ModelHawkesExpKernLogLik

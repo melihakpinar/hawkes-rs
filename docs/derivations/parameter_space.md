@@ -60,7 +60,7 @@ operator for L1 acts in the natural parametrization.
 
 - **A fit never returns an exact zero.** Every entry of a fitted `alpha` is strictly
   positive. A caller reading a fitted matrix as a sparsity pattern must threshold it,
-  and the threshold is theirs to choose; `hawk` does not choose one.
+  and the threshold is theirs to choose; `hawkes` does not choose one.
 - **A true zero is recovered as a small positive number**, not as zero. The round-trip
   test accounts for this by comparing against the estimate's own standard error, which
   is the right scale for that comparison, rather than against a fixed tolerance that

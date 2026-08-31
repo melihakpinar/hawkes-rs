@@ -6,15 +6,15 @@ file exists so that whoever finds them next does not helpfully remove them.
 
 ## What is in there
 
-`hawk-python/python/hawk/_hawk.abi3.so` — the compiled extension module — was tracked
+`hawkes-python/python/hawkes/_hawkes.abi3.so` — the compiled extension module — was tracked
 for part of M3. `maturin develop` writes it into the package source tree, so every local
 build dirtied the working tree and three commits picked up a copy:
 
 | Commit | |
 | --- | --- |
-| `84b7cb4` | `feat(hawk-python): PyO3 bindings, and fix a fixture-parsing defect they exposed` |
-| `18b2819` | `feat(hawk-python): input contract, array policy, and two Rust bugs they exposed` |
-| `7a7e3f7` | `refactor(hawk): return Result from the multivariate dimension guard` |
+| `84b7cb4` | `feat(hawkes-python): PyO3 bindings, and fix a fixture-parsing defect they exposed` |
+| `18b2819` | `feat(hawkes-python): input contract, array policy, and two Rust bugs they exposed` |
+| `7a7e3f7` | `refactor(hawkes): return Result from the multivariate dimension guard` |
 
 Three distinct blobs, 8.7 MB uncompressed between them. It is now in `.gitignore` and
 untracked, so no further copies will accumulate.

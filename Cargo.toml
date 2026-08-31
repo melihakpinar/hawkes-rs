@@ -1,13 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["hawk", "hawk-python"]
+members = ["hawkes", "hawkes-python"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/melihakpinar/hawk"
+repository = "https://github.com/melihakpinar/hawkes-rs"
 authors = ["Mesut Melih Akpinar <mesutmelihakpinar@gmail.com>"]
 
 [workspace.dependencies]

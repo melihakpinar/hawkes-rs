@@ -1,0 +1,49 @@
+{
+  "experiment": "window_bias",
+  "question": "OQ-5",
+  "methodology": "hawkes/examples/window_bias.rs",
+  "events": 20382,
+  "observed_horizon": 16000.0,
+  "last_event": 15998.782895159451,
+  "true_baseline": 0.5,
+  "true_excitation": 0.6,
+  "hawkes_exp_kern_fit_signature": "(self, events: list, start=None)",
+  "note": "Every tick row is the same call on the same events: HawkesExpKern.fit takes no observation window, so its estimate cannot depend on one. The signature is recorded above so the claim is checkable.",
+  "rows": [
+    {
+      "dead_time_fraction": 0.0,
+      "declared_horizon": 16000.0,
+      "hawk_baseline": 0.4999932387439237,
+      "tick_baseline": 0.5133200989324285,
+      "tick_excitation": 0.5971508100314341
+    },
+    {
+      "dead_time_fraction": 0.05,
+      "declared_horizon": 16800.0,
+      "hawk_baseline": 0.39821837203083926,
+      "tick_baseline": 0.5133200989324285,
+      "tick_excitation": 0.5971508100314341
+    },
+    {
+      "dead_time_fraction": 0.1,
+      "declared_horizon": 17600.0,
+      "hawk_baseline": 0.30925921882122553,
+      "tick_baseline": 0.5133200989324285,
+      "tick_excitation": 0.5971508100314341
+    },
+    {
+      "dead_time_fraction": 0.25,
+      "declared_horizon": 20000.0,
+      "hawk_baseline": 0.08768291254549292,
+      "tick_baseline": 0.5133200989324285,
+      "tick_excitation": 0.5971508100314341
+    },
+    {
+      "dead_time_fraction": 0.5,
+      "declared_horizon": 24000.0,
+      "hawk_baseline": 0.00038320896200707443,
+      "tick_baseline": 0.5133200989324285,
+      "tick_excitation": 0.5971508100314341
+    }
+  ]
+}

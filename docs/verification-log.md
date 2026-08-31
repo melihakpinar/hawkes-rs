@@ -12,7 +12,7 @@ and the fixture checksums were re-verified afterwards
 (`shasum -a 256 -c`, all six `OK`).
 
 Environment: `rustc 1.95.0`, macOS (darwin 22.6.0), `tick` oracle image
-`hawk-tick:0.8.0.2`.
+`hawkes-tick:0.8.0.2`.
 
 ### Cross-machine reproducibility, confirmed
 
@@ -44,7 +44,7 @@ appear in that count — see S9.
 
 ## Harness 1 — differential test against `tick`
 
-`hawk/tests/differential_tick.rs`. Goal step 5.
+`hawkes/tests/differential_tick.rs`. Goal step 5.
 
 ### S1 — perturb the stub log-likelihood by `+1e-6`
 
@@ -61,7 +61,7 @@ notice by reading a fixture.
 
 ```
 test differential_against_tick ... FAILED
-panicked at hawk/tests/differential_tick.rs:131:13
+panicked at hawkes/tests/differential_tick.rs:131:13
 ```
 
 The other two tests in the file stayed green, so the failure was localized rather
@@ -83,7 +83,7 @@ transposed matrix produces plausible-looking numbers.
 
 ```
 test fixture_evaluation_coeffs_use_ticks_layout ... FAILED
-panicked at hawk/tests/differential_tick.rs:270:17
+panicked at hawkes/tests/differential_tick.rs:270:17
 ```
 
 Note what stayed green: `differential_against_tick` and
@@ -124,7 +124,7 @@ Restored; green.
 
 ## Harness 2 — round-trip property test
 
-`hawk/tests/roundtrip_proptest.rs`. Goal step 6.
+`hawkes/tests/roundtrip_proptest.rs`. Goal step 6.
 
 ### S3 — make the stub return fixed parameters
 
@@ -174,7 +174,7 @@ Reverted; green.
 
 ## Harness 3 — finite-difference gradient check
 
-`hawk/tests/gradient_check.rs`. Goal step 7.
+`hawkes/tests/gradient_check.rs`. Goal step 7.
 
 Green against closed-form functions first: a quadratic and `exp(x) + y*ln(z)`, both
 with gradients taken by hand. Neither is a Hawkes quantity, per the goal.
@@ -255,7 +255,7 @@ time** rather than at test time:
 ```
 error[E0080]: evaluation panicked: GRADIENT_TOLERANCE is loose enough to admit real
 derivative errors
-   --> hawk/tests/gradient_check.rs:218:15
+   --> hawkes/tests/gradient_check.rs:218:15
 ```
 
 A future change that quietly relaxes the tolerance to make a failure go away will not
@@ -275,13 +275,13 @@ only on the day it was written.
 
 # M1 Part B
 
-Environment as above. `hawk` now has algorithms, so from here the oracles guard real
+Environment as above. `hawkes` now has algorithms, so from here the oracles guard real
 code rather than stubs.
 
 ## Harness 4 — brute-force reference (step 5)
 
-`hawk/tests/reference_loglikelihood.rs`. The reference every other likelihood test is
-measured against, so it cannot be checked against `hawk`. Its expected values are hand
+`hawkes/tests/reference_loglikelihood.rs`. The reference every other likelihood test is
+measured against, so it cannot be checked against `hawkes`. Its expected values are hand
 calculations written out in the tests, plus the Poisson degenerate identity.
 
 ### S10 — strict bounds relaxed to inclusive
@@ -307,7 +307,7 @@ blind spot was found by sabotage and would not have been found by reading.
 
 ## Harness 5 — the O(n) recursion (step 7)
 
-`hawk/tests/loglikelihood.rs`. Gated against the brute force, relative to the
+`hawkes/tests/loglikelihood.rs`. Gated against the brute force, relative to the
 computation scale rather than to `|nll|`.
 
 ### S12 — use the textbook recursion [Laub2015, eq. 20]
@@ -330,7 +330,7 @@ times.
 
 ## Harness 6 — the analytic gradient (step 8)
 
-`hawk/tests/gradient.rs`, using the same central-difference checker `gradient_check.rs`
+`hawkes/tests/gradient.rs`, using the same central-difference checker `gradient_check.rs`
 already proved can go red.
 
 ### S14 — drop `beta * Bp_j` from (G.4)
@@ -364,7 +364,7 @@ derivation requires the finite-difference check to run in both parametrizations.
 
 ## Harness 7 — the simulator and the compensator (step 6)
 
-`hawk/tests/simulator.rs`. The two CLAUDE.md §3 oracles that could not exist before
+`hawkes/tests/simulator.rs`. The two CLAUDE.md §3 oracles that could not exist before
 there was a simulator.
 
 ### S17 — an accepted event does not update the excitation state
@@ -476,7 +476,7 @@ M1's report identified three tests that existed but had never been shown to fail
 
 ## Harness 9 — the gate denominator (gap a)
 
-`hawk/tests/gate_sensitivity.rs`. `computation_scale` is the denominator of the step 7
+`hawkes/tests/gate_sensitivity.rs`. `computation_scale` is the denominator of the step 7
 comparison, and it was unguarded in the direction that matters: **inflating it loosens
 the gate, and a looser gate does not fail — it stops catching things.** That is the one
 regression class a suite cannot notice by running.
@@ -586,7 +586,7 @@ it is the property that makes every other failure in this suite debuggable.
 
 # Harness 12 — the two evaluation paths agree bitwise (issue #13)
 
-`hawk/tests/bit_identical_evaluation.rs`. `negative_log_likelihood` no longer delegates
+`hawkes/tests/bit_identical_evaluation.rs`. `negative_log_likelihood` no longer delegates
 to `negative_log_likelihood_and_gradient`; it is a separate loop. The two must return
 the same value **bitwise**, because there is no numerical reason for them to differ at
 all, so the correct tolerance is zero.
@@ -639,7 +639,7 @@ deliberate, in the test and in the doc comment together.
 
 ## Harness 13 — `d = 1` equivalence (step 9)
 
-`hawk/tests/multivariate_equivalence.rs`. One assertion, and the goal called it the
+`hawkes/tests/multivariate_equivalence.rs`. One assertion, and the goal called it the
 highest-value one here: at `d = 1` the multivariate path must return **bitwise** the
 same value and gradient as the univariate path.
 
@@ -667,7 +667,7 @@ short degenerate ones, where the rounding happens to agree.
 
 ## Harness 14 — the multivariate recursion (step 8)
 
-`hawk/tests/multivariate_loglikelihood.rs`.
+`hawkes/tests/multivariate_loglikelihood.rs`.
 
 ### S33 — transpose the excitation index in the intensity
 
@@ -685,7 +685,7 @@ test that pins the gate's sensitivity notices.
 
 ## Harness 15 — the multivariate gradient (step 11)
 
-`hawk/tests/multivariate_gradient.rs`.
+`hawkes/tests/multivariate_gradient.rs`.
 
 ### S36 — drop `beta * state_derivative` from the pair accumulator
 
@@ -709,7 +709,7 @@ inside the `1e-6` gate.
 
 ## Harness 16 — the multivariate simulator (step 7) and stationarity
 
-`hawk/tests/multivariate_simulator.rs`. Both CLAUDE.md §3 external oracles, applied
+`hawkes/tests/multivariate_simulator.rs`. Both CLAUDE.md §3 external oracles, applied
 **per component**. A pooled mean-intensity test would let an error that moves activity
 between components cancel exactly: the total right, the process wrong. That is not
 hypothetical — a transposed excitation matrix does precisely that whenever the column
@@ -745,7 +745,7 @@ signalled the problem: the answer looks like an answer.
 
 ## Harness 17 — `tick` differential at varying `D` (step 12)
 
-`hawk/tests/differential_tick.rs`, now comparing every fixture at `d` in
+`hawkes/tests/differential_tick.rs`, now comparing every fixture at `d` in
 {1, 2, 3, 10}.
 
 ### S39 — hardcode `D = 3` instead of the fixture's dimension
@@ -760,7 +760,7 @@ would have passed, and the offset would have been confirmed only coincidentally.
 
 ## Harness 18 — the fit and the parameter space (step 13, constraint (a))
 
-`hawk/tests/multivariate_roundtrip.rs`. Recovery is compared **elementwise** on the
+`hawkes/tests/multivariate_roundtrip.rs`. Recovery is compared **elementwise** on the
 excitation matrix, because every aggregate comparison is blind to a transposition:
 `transposition_is_caught_by_the_elementwise_comparison` shows that a transpose
 preserves the Frobenius norm exactly and the spectral radius exactly, so a norm-based
@@ -777,7 +777,7 @@ rather than just its size.
 
 ## Harness 19 — parallel and sequential agree bitwise (step 14)
 
-`hawk/tests/multivariate_parallel.rs`, `--features rayon`.
+`hawkes/tests/multivariate_parallel.rs`, `--features rayon`.
 
 ### S43 — combine the per-component parts in reverse index order
 
@@ -803,7 +803,7 @@ will need.
 
 ## Harness 20 — the spectral radius on reducible matrices (issue #20)
 
-`hawk/tests/spectral_radius.rs`. The Collatz-Wielandt midpoint bug was found by a
+`hawkes/tests/spectral_radius.rs`. The Collatz-Wielandt midpoint bug was found by a
 hand-written case rather than by a sabotage, and nothing pinned the class it belonged
 to. This file pins it: diagonal, block-diagonal and triangular matrices, every expected
 value computed by hand.
@@ -869,7 +869,7 @@ enough to land on the same bits either way.
 **Fix:** the field is gone (schema 3). It was a property of `adjacency`, which is in the
 file, so it added nothing a consumer could not compute — and what it did add was a
 reproducibility hazard that would have recurred for every future large-`d` fixture. The
-Rust side now computes it with `hawk`'s own routine, which is pure `f64` arithmetic,
+Rust side now computes it with `hawkes`'s own routine, which is pure `f64` arithmetic,
 deterministic, and pinned by `spectral_radius.rs` including on the reducible matrices
 where the naive method is wrong.
 
@@ -886,9 +886,9 @@ stays whether or not it is needed again.
 
 ## Harness 21 — bitwise equality across the boundary (step 3)
 
-`hawk-python/tests/test_bit_identity.py`. The Python bindings must return **bit for
+`hawkes-python/tests/test_bit_identity.py`. The Python bindings must return **bit for
 bit** what Rust computes, compared against `tests/fixtures/rust-nll.json`, which
-`hawk/tests/rust_nll_manifest.rs` fails on if it goes stale.
+`hawkes/tests/rust_nll_manifest.rs` fails on if it goes stale.
 
 ### What it found, on the first run
 
@@ -924,7 +924,7 @@ That is the argument for step 3 being bitwise rather than tolerant, made by the 
 itself: a tolerance-based parity test would have passed on the first run and the corpus
 would still be being misread.
 
-`hawk/tests/fixture_parsing.rs` pins it, with the three literals and their correctly
+`hawkes/tests/fixture_parsing.rs` pins it, with the three literals and their correctly
 rounded doubles.
 
 ### S46 — remove `float_roundtrip`
@@ -945,7 +945,7 @@ A fixed count would have been wrong twice over — the first draft asserted 30 o
 
 ## Harness 22 — the input contract and error mapping at the boundary (steps 4, 6)
 
-`hawk-python/tests/test_input_contract.py`. Each test names the `conventions.md` C8
+`hawkes-python/tests/test_input_contract.py`. Each test names the `conventions.md` C8
 rule it enforces, so the boundary can neither widen nor narrow the contract.
 
 ### What step 6 found
@@ -970,7 +970,7 @@ constructs both from the same fixture. It took a binding whose caller can pass a
 
 ## Harness 23 — the array policy (step 5)
 
-`hawk-python/tests/test_array_handling.py`, one test per section of
+`hawkes-python/tests/test_array_handling.py`, one test per section of
 `docs/python-array-handling.md`, written after the document and before the behaviour was
 settled.
 
@@ -994,7 +994,7 @@ would be waste. §6 now promises the behaviour a caller can rely on — writable
 it changes nothing else, lifetime independent of any Rust value — and says explicitly
 that `OWNDATA` is not the way to check it. The test asserts the behaviour.
 
-## `hawk` is not bit-reproducible across platforms, and now says so
+## `hawkes` is not bit-reproducible across platforms, and now says so
 
 The bit-identity reference was committed at first. CI failed on it: the manifest
 generated on macOS aarch64 recorded `0x4086d455b0fc6646` for one point and Linux
@@ -1023,9 +1023,9 @@ with the same glibc agree.
   than passing quietly, which is the safe direction.
 - **Nothing else in the repository relied on cross-platform bit equality.** The `tick`
   differential compares at `1e-9` relative and the fixtures store `tick`'s values, not
-  `hawk`'s. This is the first thing that asked the question, and the answer is no.
+  `hawkes`'s. This is the first thing that asked the question, and the answer is no.
 
-`hawk/tests/rust_nll_manifest.rs`, which existed to keep the committed reference
+`hawkes/tests/rust_nll_manifest.rs`, which existed to keep the committed reference
 current, is deleted: with generation at test time there is no staleness to guard.
 
 ## Summary
@@ -1130,7 +1130,7 @@ was an `assert!`. It is now `Error::ProcessDimensionMismatch`, per CLAUDE.md §5
 halves come from the caller, so a mismatch is invalid input and not a violated internal
 invariant.
 
-Sabotage, three parts, all in `hawk/tests/multivariate_loglikelihood.rs`:
+Sabotage, three parts, all in `hawkes/tests/multivariate_loglikelihood.rs`:
 
 | Removed | Test | Result |
 | --- | --- | --- |
@@ -1148,7 +1148,7 @@ so they cannot drift into disagreeing about what a mismatch is.
 ## S48 — the fixture loader's float round-trip, guarded permanently
 
 The `serde_json` defect (13 of 44 evaluation points read one ulp away from the values
-`tick` simulated) was pinned by three literals in `hawk/tests/fixture_parsing.rs`. That
+`tick` simulated) was pinned by three literals in `hawkes/tests/fixture_parsing.rs`. That
 holds only for those three strings in that one corpus. If `float_roundtrip` is dropped
 from `Cargo.toml`, or the corpus is regenerated with different values, or the loader
 changes shape, the same silent corruption returns.
@@ -1187,12 +1187,12 @@ five to green.
 
 ## S49 — the Python fixture-parity oracle
 
-`hawk-python/tests/test_fixture_parity.py` was the one oracle in the repository with no
+`hawkes-python/tests/test_fixture_parity.py` was the one oracle in the repository with no
 sabotage on record. Every Rust test file carried one; this file did not, which made the
 README's claim that *every* oracle had been shown to go red an overstatement rather than
 a fact. It is now a fact.
 
-Two mutations, both in `hawk-python/src/lib.rs`, chosen so each is caught by exactly one
+Two mutations, both in `hawkes-python/src/lib.rs`, chosen so each is caught by exactly one
 of the file's two tests.
 
 ### Transposing the excitation matrix at the boundary
@@ -1200,7 +1200,7 @@ of the file's two tests.
 `matrix_from` reads `view[[j, i]]` instead of `view[[i, j]]`.
 
 `test_oq8_identity_holds_through_the_bindings` goes red on `bivariate_asymmetric`:
-hawk 833.137280423698 against tick's 701.3137302959004, a difference of 131.8 where the
+hawkes 833.137280423698 against tick's 701.3137302959004, a difference of 131.8 where the
 gate is `1e-9 * 761.5 = 7.6e-7`.
 
 **The whole Rust suite stays green — 22 targets, zero failures.** No Rust test passes

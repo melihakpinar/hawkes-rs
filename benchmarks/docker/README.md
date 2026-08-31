@@ -64,8 +64,8 @@ through the learner with `solver="agd"`.
 ## Build and run
 
 ```sh
-docker build --platform=linux/amd64 -t hawk-tick:0.8.0.2 benchmarks/docker
-docker run  --rm --platform=linux/amd64 hawk-tick:0.8.0.2
+docker build --platform=linux/amd64 -t hawkes-tick:0.8.0.2 benchmarks/docker
+docker run  --rm --platform=linux/amd64 hawkes-tick:0.8.0.2
 ```
 
 The smoke test simulates a seeded univariate Hawkes process on `[0, 500]`, fits it by
@@ -88,7 +88,7 @@ OK
 
 ```sh
 docker run --rm --platform=linux/amd64 -v "$PWD/tests/fixtures":/out \
-    hawk-tick:0.8.0.2 python /work/generate_fixtures.py --out /out
+    hawkes-tick:0.8.0.2 python /work/generate_fixtures.py --out /out
 ```
 
 Output is byte-identical on re-run: every scenario fixes the simulator seed, and the
