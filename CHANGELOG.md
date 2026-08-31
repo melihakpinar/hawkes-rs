@@ -11,19 +11,26 @@ First release. Univariate and multivariate exponential-kernel Hawkes processes:
 simulation, log-likelihood, analytic gradient, maximum-likelihood estimation, Python
 wheels, and a benchmark suite measured against `tick`.
 
-### To do once v0.1.0 is actually published
+### Published, and what installing it showed
 
-Two statements in the README are true **now** and become false the moment the packages
-are on the registries. They are left accurate for the current state rather than
-pre-written, and must be updated as part of publishing:
+`hawkes-rs` 0.1.0 is on crates.io and PyPI. The README's install block now gives the
+real commands, verified against the published artifacts rather than the locally built
+ones: `pip install hawkes-rs` in a clean virtualenv in a directory with no source tree,
+and `cargo add hawkes-rs` in an empty crate, both reproducing the quickstart figures
+digit for digit — 24 899 events, baseline 0.5041, excitation 0.5951, decay 0.9852.
 
-- The line **"Neither package is published yet; this is pre-alpha and the API will
-  change."** in `## Install`. After publishing, only the pre-alpha and API-stability
-  half remains true.
-- The **`cargo add --git https://github.com/melihakpinar/hawkes-rs hawkes-rs`** line in
-  the same block. Once the crate is on crates.io this becomes `cargo add hawkes-rs`, and
-  the Python block becomes `pip install hawkes-rs` instead of building a wheel from a
-  checkout.
+Two things that only the published artifacts could show:
+
+- **The Rust quickstart does not compile with a bare `cargo add rand`.** `simulate`
+  takes an `impl rand::Rng`, so the caller's `rand` must be the same major version the
+  crate was built against. `cargo add rand` resolves to 0.10 and fails on the trait
+  bound; `rand@0.9` and `rand_chacha@0.9` are required, and the README now says so.
+  Leaking a dependency's types through the public API is what makes this the caller's
+  problem, and it is worth revisiting before the API stabilises.
+- **PyPI carries only the macOS `arm64` wheel and an sdist.** The release was published
+  from a laptop, so the Linux, Windows and Intel-macOS wheels the CI matrix builds were
+  never uploaded, and `pip install` on those platforms falls back to compiling the sdist
+  and needs a Rust toolchain. Publishing from CI would close this.
 
 ### Added — M4, benchmarks and the README
 

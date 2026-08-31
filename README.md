@@ -26,7 +26,9 @@ claimed.
 
 ## Install
 
-Neither package is published yet; this is pre-alpha and the API will change.
+`hawkes-rs` 0.1.0 is on [crates.io](https://crates.io/crates/hawkes-rs) and
+[PyPI](https://pypi.org/project/hawkes-rs/). It is still pre-alpha and the API will
+change.
 
 The distribution is named **`hawkes-rs`** on both registries because `hawkes` is taken
 on PyPI by an unrelated package. What you import is **`hawkes`**: `use hawkes::…` in
@@ -34,12 +36,19 @@ Rust, `import hawkes` in Python.
 
 ```sh
 # Rust
-cargo add --git https://github.com/melihakpinar/hawkes-rs hawkes-rs
+cargo add hawkes-rs
 
-# Python — build the wheel from a checkout
-pip install maturin && maturin build --release --manifest-path hawkes-python/Cargo.toml
-pip install target/wheels/hawkes_rs-*.whl
+# `simulate` takes an `impl rand::Rng`, so a caller's `rand` has to be the same
+# major version this was built against. `cargo add rand` alone resolves to 0.10 and
+# will not compile against it.
+cargo add rand@0.9 rand_chacha@0.9
+
+# Python
+pip install hawkes-rs
 ```
+
+Both install lines above were run in a clean environment with no source tree present,
+and the quickstart below was reproduced from the published artifacts digit for digit.
 
 ## Quickstart
 
@@ -381,6 +390,12 @@ targeting it sat queued for 15 hours 49 minutes without starting while every oth
 started within 6 seconds. It ships because Intel Macs are common enough that an untested
 wheel beats none, and it is labelled rather than left to be assumed working. Its floor is
 macOS 10.12, Rust's minimum for that target.
+
+**What is on PyPI is narrower than what CI builds.** The 0.1.0 release carries the
+macOS `arm64` wheel and an sdist, and nothing else, so on Linux, Windows and Intel macOS
+`pip install hawkes-rs` falls back to building the sdist and therefore needs a Rust
+toolchain. The table above is what the workflow produces, not what was uploaded; closing
+that gap means publishing from CI rather than from a laptop.
 
 musllinux, Windows on ARM and PyPy are not built at all.
 Details: [`docs/python-wheels.md`](docs/python-wheels.md).
