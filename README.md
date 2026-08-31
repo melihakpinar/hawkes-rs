@@ -1,4 +1,4 @@
-# hawkes
+# hawkes-rs
 
 Multivariate Hawkes processes in Rust: simulation and maximum-likelihood estimation,
 with Python bindings.
@@ -341,6 +341,21 @@ Regenerating the fixtures needs Docker; see
 [`benchmarks/docker/README.md`](benchmarks/docker/README.md). It is not required to run
 the suite — the fixtures are committed.
 
+### Reproducing the benchmarks
+
+```sh
+benchmarks/suite/fit_d1.sh
+benchmarks/suite/fit_d10.sh
+benchmarks/suite/fit_d100.sh
+benchmarks/suite/simulate.sh
+benchmarks/suite/window_bias.sh
+python3 benchmarks/suite/create_diagrams.py
+```
+
+Each is standalone: it builds what it needs, creates a virtual environment with the
+pinned `tick`, and writes JSON to `benchmarks/results/`. Timings are machine-specific;
+the JSON records the hardware and the full spread, not just the median.
+
 ## Python wheels
 
 `abi3`, built once per platform against CPython 3.9. What follows is what a workflow was
@@ -394,21 +409,6 @@ branching ratio **is** `alpha`. The other convention in the literature gives a d
 meaning to `alpha`; the choice is pinned by experiment in `conventions.md` C1 against
 `tick`, not by preference.
 
-## Reproducing the benchmarks
-
-```sh
-benchmarks/suite/fit_d1.sh
-benchmarks/suite/fit_d10.sh
-benchmarks/suite/fit_d100.sh
-benchmarks/suite/simulate.sh
-benchmarks/suite/window_bias.sh
-python3 benchmarks/suite/create_diagrams.py
-```
-
-Each is standalone: it builds what it needs, creates a virtual environment with the
-pinned `tick`, and writes JSON to `benchmarks/results/`. Timings are machine-specific;
-the JSON records the hardware and the full spread, not just the median.
-
 ## Layout
 
 ```
@@ -416,7 +416,9 @@ hawkes/                  Rust core crate
 hawkes-python/           PyO3 bindings, maturin
 docs/
   derivations/         approved derivations; conventions.md pins the index conventions
-  references/          papers (PDFs are not committed; see the README there for sources)
+  references/          papers. PDFs are not committed: they are copyrighted and
+                       redistributing them is not ours to do. The README there names
+                       each paper and where to obtain it.
   open-questions.md    OQ-1 to OQ-11, all resolved, each with the evidence that settled it
   verification-log.md  proof that each oracle goes red when the code is broken
   positioning-probe.md the univariate timing probe M4's benchmarks build on

@@ -11,6 +11,20 @@ First release. Univariate and multivariate exponential-kernel Hawkes processes:
 simulation, log-likelihood, analytic gradient, maximum-likelihood estimation, Python
 wheels, and a benchmark suite measured against `tick`.
 
+### To do once v0.1.0 is actually published
+
+Two statements in the README are true **now** and become false the moment the packages
+are on the registries. They are left accurate for the current state rather than
+pre-written, and must be updated as part of publishing:
+
+- The line **"Neither package is published yet; this is pre-alpha and the API will
+  change."** in `## Install`. After publishing, only the pre-alpha and API-stability
+  half remains true.
+- The **`cargo add --git https://github.com/melihakpinar/hawkes-rs hawkes-rs`** line in
+  the same block. Once the crate is on crates.io this becomes `cargo add hawkes-rs`, and
+  the Python block becomes `pip install hawkes-rs` instead of building a wheel from a
+  checkout.
+
 ### Added — M4, benchmarks and the README
 
 - `benchmarks/README.md`: methodology fixed and committed before any number was
