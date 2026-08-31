@@ -1260,3 +1260,39 @@ The second case is the one a filename-only check would have missed, which is why
 comparison is on the digest. The third is the failure this whole entry is about: an empty
 directory is the state in which twine is most certainly green and least certainly
 correct.
+
+## S51 — the crates.io half of publishing, and its verifier
+
+`wheels.yml` published only to PyPI. crates.io was a manual step for both 0.1.0 and
+0.1.1 — separate from the pipeline, with nothing failing when it was missed. A release
+step that only a person remembers is one that eventually does not happen.
+
+`cargo publish` is now in the same tag-triggered job, and
+`.github/scripts/verify_crates_release.py` asserts the outcome afterwards, for the same
+reason as S50: the publish step's exit code is not evidence the version is live.
+
+**Idempotency.** `cargo publish` has no `--skip-existing` and errors on a version already
+present, so re-pushing a tag would turn the job red for the wrong reason. The workflow
+asks crates.io first, in `--check-only` mode, and publishes only if the version is
+absent. When that query itself fails the answer is "not published", so a genuine
+duplicate still fails loudly rather than being swallowed.
+
+### Sabotage
+
+Run against the live crate:
+
+| case | result |
+| --- | --- |
+| `hawkes-rs 0.1.1`, the version actually published | green, exit 0 |
+| `hawkes-rs 0.9.9`, never published | **red**, exit 1, `present=False` |
+| `hawkes-rs 0.1.0`, real but stale | **red**, exit 1, `max_version='0.1.1' wanted='0.1.0'` |
+| a crate name that does not exist | **red**, exit 1, `HTTP Error 404` |
+
+The stale-version case is the one that matters: 0.1.0 *is* on crates.io, so a check that
+only asked "does this version exist" would have passed while the registry served an old
+release with the wrong README — the exact failure this was written for.
+
+The 404 case found a defect in the verifier itself on its first run: every attempt raised,
+so the diagnosis at the end read an unassigned `present` and died with `UnboundLocalError`
+instead of reporting the failure. It exited non-zero either way, but for the wrong reason
+and with no usable message. Fixed by initialising the state before the retry loop.
