@@ -5,6 +5,7 @@ name: wheels
 on:
   push:
     branches: [master]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -100,6 +101,24 @@ jobs:
           name: rust-nll-linux-x86_64
           path: target/rust-nll.json
 
+  # The source distribution. cibuildwheel builds wheels only, so without this a tag
+  # would publish no sdist and anything outside the wheel matrix would have nothing to
+  # fall back on.
+  sdist:
+    name: sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install maturin
+      - run: maturin sdist --manifest-path hawkes-python/Cargo.toml --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
   # Step 9 and 10: the wheel installs and passes in an environment with no Rust
   # toolchain and no source tree, and pytest runs against the installed package.
   clean-install:
@@ -184,3 +203,65 @@ jobs:
           HAWK_FIXTURES: /tmp/clean/fixtures
           HAWK_RUST_NLL: ${{ github.workspace }}/reference/rust-nll.json
         run: python -m pytest tests -q
+
+  # Publishing happens from CI, not from a laptop. v0.1.0 was released by hand and
+  # carried only the macOS arm64 wheel plus an sdist, because that is all one machine
+  # can build; on every other platform `pip install` fell back to compiling the sdist
+  # and needed a Rust toolchain. This job uploads what the matrix actually produces.
+  #
+  # `needs` lists every other job, so a tag that fails to build, fails its clean
+  # install, or disagrees with the Rust reference publishes nothing.
+  publish:
+    name: publish to PyPI
+    needs: [build, manifest, sdist, clean-install]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # Every wheel artifact, then the sdist, flattened into one directory.
+      # merge-multiple puts their contents side by side rather than in per-artifact
+      # subdirectories. Two steps rather than one brace pattern, so the match is
+      # unambiguous.
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdist
+          path: dist
+
+      - name: Show what will be uploaded
+        run: ls -l dist
+
+      # Fail rather than publish a partial release: five wheels and one sdist.
+      - name: Require the full matrix
+        run: |
+          wheels=$(find dist -name '*.whl' | wc -l)
+          sdists=$(find dist -name '*.tar.gz' | wc -l)
+          echo "wheels=$wheels sdists=$sdists"
+          if [ "$wheels" -ne 5 ] || [ "$sdists" -ne 1 ]; then
+            echo "expected 5 wheels and 1 sdist; refusing to publish a partial release" >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install twine
+
+      - name: Check the metadata before uploading
+        run: twine check dist/*
+
+      # --skip-existing because PyPI accepts new files on an existing version but
+      # rejects a filename it already has. 0.1.0 already carries the macOS arm64 wheel
+      # and the sdist, so re-running this tag adds the four missing wheels and skips
+      # those two instead of failing the job.
+      - name: Upload
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload --skip-existing --non-interactive dist/*

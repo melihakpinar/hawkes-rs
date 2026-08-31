@@ -100,6 +100,26 @@ is bounded and tiny — but it is not zero, and anything comparing results acros
 machines must use a tolerance. `docs/verification-log.md` records how this was found
 and how FMA contraction was ruled out as the cause.
 
+## Publishing
+
+v0.1.0 was released by hand from a laptop, so PyPI received only the macOS `arm64`
+wheel and the sdist — one machine can build one platform. Everywhere else
+`pip install hawkes-rs` fell back to compiling the sdist and needed a Rust toolchain,
+which is what the wheels exist to avoid.
+
+`wheels.yml` now publishes. A `v*` tag runs the job after `build`, `manifest`, `sdist`
+and `clean-install` have all passed, so a tag that fails to build or fails its
+clean-install publishes nothing. It refuses to upload unless it has **five wheels and
+one sdist**, rather than shipping a partial release quietly, and uses
+`twine upload --skip-existing`.
+
+`--skip-existing` is what makes adding to 0.1.0 work. PyPI accepts new files on an
+existing version but rejects a filename it already holds, so the two files already
+there are skipped and the four missing wheels are added. That this is allowed was
+checked against PyPI rather than assumed: 60 post-2022 releases were found whose files
+were uploaded more than six hours apart, including `pillow` 9.2.0 gaining a wheel 62
+days after release, `tokenizers` 0.13.2 at 70 days, and `orjson` 3.8.0 at 59 days.
+
 ## Not covered, deliberately
 
 - **musllinux** is skipped (`CIBW_SKIP`). Nothing has been tested against musl and
