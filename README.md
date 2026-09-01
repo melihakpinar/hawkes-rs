@@ -171,6 +171,8 @@ wins.
   citations; `conventions.md` pins each CLAUDE.md §1.3 hazard to a source.
 - [`docs/open-questions.md`](docs/open-questions.md) — OQ-1 to OQ-11, all resolved.
 - [`docs/verification-log.md`](docs/verification-log.md) — each oracle shown to go red.
+- [`docs/architecture-review.md`](docs/architecture-review.md) — the September 2026
+  review of the module split, dependencies and bindings, with its follow-up issues.
 - [`benchmarks/README.md`](benchmarks/README.md) — methodology, fixed before any number.
 - [`CHANGELOG.md`](CHANGELOG.md), [`CONTRIBUTING.md`](CONTRIBUTING.md),
   [`CLAUDE.md`](CLAUDE.md) — the rules this repository is maintained under.
