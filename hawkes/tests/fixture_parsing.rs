@@ -16,58 +16,24 @@
 //!
 //! # Sabotage
 //!
-//! Removing `features = ["float_roundtrip"]` from `serde_json` turns this red on the
-//! literals below. Recorded in `docs/verification-log.md`.
+//! Removing `features = ["float_roundtrip"]` from `serde_json` turns every test in this
+//! file red. Recorded in `docs/verification-log.md` (S48, S53).
 
-/// Literals taken from `tests/fixtures/bivariate_symmetric.json`, with the nearest
-/// `f64` determined by exact decimal comparison rather than by another parser: for
-/// `12.992302737526387` the chosen double is `9.08e-17` from the true value and its
-/// neighbours are `1.69e-15` and `1.87e-15` away, so the answer is not in doubt.
-const CORRECTLY_ROUNDED: [(&str, u64); 3] = [
-    ("12.992302737526387", 0x4029_fc0f_1aba_d070),
-    ("100.68066598854051", 0x4059_2b90_0814_11fc),
-    ("104.38219480240177", 0x405a_1875_e130_4113),
+/// Bit patterns of three literals from `tests/fixtures/bivariate_symmetric.json` —
+/// `12.992302737526387`, `100.68066598854051` and `104.38219480240177` — with the
+/// nearest `f64` determined by exact decimal comparison rather than by another parser:
+/// for the first, the chosen double is `9.08e-17` from the true value and its neighbours
+/// are `1.69e-15` and `1.87e-15` away, so the answer is not in doubt. These are the
+/// literals the fast path originally got wrong.
+const CORRECTLY_ROUNDED: [u64; 3] = [
+    0x4029_fc0f_1aba_d070,
+    0x4059_2b90_0814_11fc,
+    0x405a_1875_e130_4113,
 ];
 
-#[test]
-fn serde_json_parses_fixture_floats_to_the_nearest_double() {
-    for (literal, expected) in CORRECTLY_ROUNDED {
-        let parsed: f64 = serde_json::from_str(literal).expect("valid JSON number");
-        assert_eq!(
-            parsed.to_bits(),
-            expected,
-            "{literal} parsed to 0x{:016x} ({parsed:?}), nearest double is \
-             0x{expected:016x} ({:?}). serde_json's `float_roundtrip` feature is \
-             probably not enabled; without it the fixture corpus is read one ulp away \
-             from the values tick produced.",
-            parsed.to_bits(),
-            f64::from_bits(expected)
-        );
-    }
-}
-
-/// The same check through the type the fixtures are actually read as, so the feature
-/// cannot be enabled for a bare `f64` and lost for a struct field.
-#[test]
-fn fixture_shaped_parsing_is_also_exact() {
-    #[derive(serde::Deserialize)]
-    struct Events {
-        events: Vec<Vec<f64>>,
-    }
-    let json = format!(
-        r#"{{"events": [[{}, {}], [{}]]}}"#,
-        CORRECTLY_ROUNDED[0].0, CORRECTLY_ROUNDED[1].0, CORRECTLY_ROUNDED[2].0
-    );
-    let parsed: Events = serde_json::from_str(&json).expect("valid");
-    assert_eq!(parsed.events[0][0].to_bits(), CORRECTLY_ROUNDED[0].1);
-    assert_eq!(parsed.events[0][1].to_bits(), CORRECTLY_ROUNDED[1].1);
-    assert_eq!(parsed.events[1][0].to_bits(), CORRECTLY_ROUNDED[2].1);
-}
-
 // ---------------------------------------------------------------------------------
-// Permanent guards. The three literals above are a snapshot of one corpus; these two
-// tests hold whatever the corpus becomes, and hold for the loader rather than for a
-// bare `f64`.
+// The three literals above are a snapshot of one corpus. Two of the guards below hold
+// whatever the corpus becomes, and all hold for the loader rather than for a bare `f64`.
 // ---------------------------------------------------------------------------------
 
 use rand::{Rng, SeedableRng};
@@ -140,10 +106,10 @@ fn hard_values_survive_the_fixture_round_trip() {
         ),
         (
             "a corpus literal that the fast path got wrong",
-            f64::from_bits(0x4029_fc0f_1aba_d070),
+            f64::from_bits(CORRECTLY_ROUNDED[0]),
         ),
-        ("another", f64::from_bits(0x4059_2b90_0814_11fc)),
-        ("a third", f64::from_bits(0x405a_1875_e130_4113)),
+        ("another", f64::from_bits(CORRECTLY_ROUNDED[1])),
+        ("a third", f64::from_bits(CORRECTLY_ROUNDED[2])),
     ];
     for (name, value) in cases {
         assert_round_trips(&[value], name);

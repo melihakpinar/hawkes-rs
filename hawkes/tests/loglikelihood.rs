@@ -15,7 +15,7 @@
 mod common;
 
 use common::{
-    RECURSION_TOLERANCE, brute_force_negative_log_likelihood as brute_force, computation_scale,
+    Lcg, RECURSION_TOLERANCE, brute_force_negative_log_likelihood as brute_force, computation_scale,
 };
 use hawkes::univariate::{Observation, Parameters, negative_log_likelihood};
 use proptest::prelude::*;
@@ -90,21 +90,15 @@ fn agrees_with_brute_force_on_degenerate_input() {
 /// Long realizations, where the recursion has the most state to carry.
 #[test]
 fn agrees_with_brute_force_on_long_realizations() {
-    // Deterministic pseudo-random times: a small LCG keeps this test independent of
-    // the simulator, which is validated separately and must not be a prerequisite
-    // for the likelihood gate.
-    let mut state = 0x2545_F491_4F6C_DD1Du64;
-    let mut next = || {
-        state ^= state << 13;
-        state ^= state >> 7;
-        state ^= state << 17;
-        (state >> 11) as f64 / (1u64 << 53) as f64
-    };
+    // Deterministic pseudo-random times: the shared xorshift generator keeps this test
+    // independent of the simulator, which is validated separately and must not be a
+    // prerequisite for the likelihood gate.
+    let mut rng = Lcg::new(0x2545_F491_4F6C_DD1D);
 
     for (count, decay) in [(500usize, 0.9), (2000, 0.05), (2000, 4.0)] {
         assert!(count <= MAX_EVENTS_FOR_COMPARISON);
         let horizon = count as f64 / 2.0;
-        let mut times: Vec<f64> = (0..count).map(|_| next() * horizon).collect();
+        let mut times: Vec<f64> = (0..count).map(|_| rng.next_f64() * horizon).collect();
         times.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let parameters = Parameters::new(1.3, 0.6, decay).unwrap();
         let observation = Observation::new(&times, horizon).unwrap();

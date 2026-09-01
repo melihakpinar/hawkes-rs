@@ -290,6 +290,36 @@ fn invert_3x3(m: &[[f64; 3]; 3]) -> Option<[[f64; 3]; 3]> {
     Some(inverse)
 }
 
+/// Kolmogorov-Smirnov statistic of `sample` against the unit-rate exponential CDF.
+///
+/// Shared by the univariate and multivariate time-rescaling oracles (CLAUDE.md §3,
+/// oracle 2), which test the same distribution at the same level; they are one
+/// decision, kept in one place with [`KS_CRITICAL_VALUE_1_PERCENT`].
+pub fn ks_statistic_against_unit_exponential(sample: &mut [f64]) -> f64 {
+    sample.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let n = sample.len() as f64;
+    let mut deviation: f64 = 0.0;
+    for (index, &value) in sample.iter().enumerate() {
+        let theoretical = 1.0 - (-value).exp();
+        let below = index as f64 / n;
+        let above = (index as f64 + 1.0) / n;
+        deviation = deviation.max((theoretical - below).abs());
+        deviation = deviation.max((above - theoretical).abs());
+    }
+    deviation
+}
+
+/// Numerator of the KS critical value at the 1% level: the statistic is compared
+/// against `1.628 / sqrt(n)`.
+///
+/// 1% rather than 5% because the oracles run over several seeds and a 5% level would
+/// fail one in twenty by construction; with 6 seeds at 1% the chance of a spurious
+/// failure is about 6%, which is still visible but tolerable for a test that must not
+/// be flaky. The point of the threshold is to catch a systematically wrong
+/// compensator, which produces a statistic many times the critical value, not to do
+/// careful inference.
+pub const KS_CRITICAL_VALUE_1_PERCENT: f64 = 1.628;
+
 // ---------------------------------------------------------------- multivariate
 
 use hawkes::multivariate::{Observation as MultiObservation, Parameters as MultiParameters};

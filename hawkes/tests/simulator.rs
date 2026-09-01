@@ -22,6 +22,9 @@
 //! test red while leaving the mean-intensity test green, which is the asymmetry that
 //! makes the residual oracle worth having. Recorded in `docs/verification-log.md`.
 
+mod common;
+
+use common::{KS_CRITICAL_VALUE_1_PERCENT, ks_statistic_against_unit_exponential};
 use hawkes::univariate::{Observation, Parameters, compensator_at_events, simulate};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -42,21 +45,6 @@ const SEEDS: [u64; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
 /// to be flaky and tight enough that a wrong branching-ratio convention
 /// (`alpha` vs `alpha/beta`, a factor of `beta`) fails it comfortably.
 const MEAN_INTENSITY_TOLERANCE: f64 = 0.05;
-
-/// Kolmogorov-Smirnov statistic of `sample` against the unit-rate exponential CDF.
-fn ks_statistic_against_unit_exponential(sample: &mut [f64]) -> f64 {
-    sample.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let n = sample.len() as f64;
-    let mut deviation: f64 = 0.0;
-    for (index, &value) in sample.iter().enumerate() {
-        let theoretical = 1.0 - (-value).exp();
-        let below = index as f64 / n;
-        let above = (index as f64 + 1.0) / n;
-        deviation = deviation.max((theoretical - below).abs());
-        deviation = deviation.max((above - theoretical).abs());
-    }
-    deviation
-}
 
 /// The stationary mean intensity `mu / (1 - alpha)` [Laub2015, eq. 6].
 ///
@@ -92,12 +80,8 @@ fn converges_to_the_stationary_mean_intensity() {
 
 /// Time-rescaling residuals must be `Exp(1)` [Laub2015, Theorem 4].
 ///
-/// The KS critical value at the 1% level is `1.628 / sqrt(n)`. 1% rather than 5%
-/// because this runs over several seeds and a 5% level would fail one in twenty by
-/// construction; with 6 seeds at 1% the chance of a spurious failure is about 6%,
-/// which is still visible but tolerable for a test that must not be flaky. The point
-/// of the threshold is to catch a systematically wrong compensator, which produces a
-/// statistic many times the critical value, not to do careful inference.
+/// The KS critical value is `KS_CRITICAL_VALUE_1_PERCENT / sqrt(n)`; the level, and why
+/// it is 1% rather than 5%, is documented on that constant in `common/`.
 #[test]
 fn time_rescaled_residuals_are_unit_exponential() {
     let cases = [
@@ -126,7 +110,7 @@ fn time_rescaled_residuals_are_unit_exponential() {
 
             let n = residuals.len() as f64;
             let statistic = ks_statistic_against_unit_exponential(&mut residuals);
-            let critical = 1.628 / n.sqrt();
+            let critical = KS_CRITICAL_VALUE_1_PERCENT / n.sqrt();
             assert!(
                 statistic <= critical,
                 "mu={} alpha={} beta={} seed={seed}: KS statistic {statistic:?} > \
@@ -162,7 +146,7 @@ fn the_ks_test_rejects_residuals_from_the_wrong_parameters() {
     }
     let n = residuals.len() as f64;
     let statistic = ks_statistic_against_unit_exponential(&mut residuals);
-    let critical = 1.628 / n.sqrt();
+    let critical = KS_CRITICAL_VALUE_1_PERCENT / n.sqrt();
     assert!(
         statistic > critical,
         "KS statistic {statistic:?} did not exceed {critical:?} for residuals \

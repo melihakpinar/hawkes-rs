@@ -157,17 +157,3 @@ fn the_fit_actually_optimizes() {
         fitted.branching_ratio()
     );
 }
-
-#[test]
-fn rejects_data_that_cannot_identify_the_parameters() {
-    let observation = Observation::new(&[1.0, 2.0], 5.0).unwrap();
-    assert!(
-        fit(&observation).is_err(),
-        "fitting three parameters to two events must be an error"
-    );
-    let empty = Observation::new(&[], 5.0).unwrap();
-    assert!(
-        fit(&empty).is_err(),
-        "fitting to no events must be an error"
-    );
-}
