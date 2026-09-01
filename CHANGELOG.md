@@ -13,6 +13,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   user runs, and `dump_fixture_nll.rs`, which the Python bit-identity test depends on.
   No library code path changed: every fixture negative log-likelihood bit pattern,
   the quickstart output and seeded simulations are identical before and after.
+- `rand_distr` is no longer a dependency of `hawkes-rs`; nothing in the crate used it.
 
 ## [0.1.2] — 2026-09-01
 
