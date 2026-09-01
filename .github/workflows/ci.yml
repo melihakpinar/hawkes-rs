@@ -34,6 +34,10 @@ jobs:
       - name: cargo test
         run: cargo test --all-features
 
+      # The README's Rust quickstart is this file, verbatim; it must run, not only build.
+      - name: Run the Rust quickstart
+        run: cargo run --example quickstart
+
       # The default feature set is what most callers build, and `rayon` changes which
       # code paths compile. Both are run.
       - name: cargo test (default features)
@@ -69,6 +73,15 @@ jobs:
 
       - name: pytest
         run: python -m pytest hawkes-python/tests -q
+
+      # The README's Python quickstart is this file, verbatim; both examples must run.
+      - name: Run the Python examples
+        run: |
+          python hawkes-python/examples/quickstart.py
+          python hawkes-python/examples/fit_multivariate.py
+
+      - name: README quickstart blocks are the committed examples
+        run: python .github/scripts/check_readme_quickstarts.py
 
   fixtures:
     name: fixtures are reproducible
