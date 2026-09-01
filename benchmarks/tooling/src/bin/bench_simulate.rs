@@ -1,4 +1,5 @@
-//! `hawkes` side of the M4 simulate benchmark. See `benchmarks/README.md`.
+//! `hawkes` side of the simulate benchmark. See `benchmarks/README.md`; driven by
+//! `benchmarks/suite/_common.sh`.
 //!
 //! Usage: `bench_simulate <out_dir> <d> <n,n,...>`
 

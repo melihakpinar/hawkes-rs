@@ -5,6 +5,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- The benchmark and probe binaries moved from `hawkes/examples/` to the workspace
+  member `benchmarks/tooling/` (`cargo build --release -p hawkes-benchmarks`); the
+  suite scripts follow. `hawkes/examples/` now holds `quickstart.rs`, the example a
+  user runs, and `dump_fixture_nll.rs`, which the Python bit-identity test depends on.
+  No library code path changed: every fixture negative log-likelihood bit pattern,
+  the quickstart output and seeded simulations are identical before and after.
+
 ## [0.1.2] — 2026-09-01
 
 README corrections and two fixes to the publish workflow. No library code changed.

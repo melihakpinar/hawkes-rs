@@ -1,4 +1,5 @@
-//! `hawkes` side of the M4 fit benchmarks. See `benchmarks/README.md`.
+//! `hawkes` side of the fit benchmarks. See `benchmarks/README.md`; driven by
+//! `benchmarks/suite/_common.sh`.
 //!
 //! Generates the shared data for one dimension, writes it out for the `tick` side, and
 //! times the fit under the protocol in §4. Enforces the §4.1 budget.

@@ -1,4 +1,4 @@
-"""`tick` side of the OQ-5 window measurement. See hawkes/examples/window_bias.rs.
+"""`tick` side of the OQ-5 window measurement. See benchmarks/tooling/src/bin/window_bias.rs.
 
 Every row is the same call on the same events, because `HawkesExpKern.fit` has no
 argument for the observation window. That is the finding: the column is constant by
@@ -54,7 +54,7 @@ def main(work):
     out.write_text(json.dumps({
         "experiment": "window_bias",
         "question": "OQ-5",
-        "methodology": "hawkes/examples/window_bias.rs",
+        "methodology": "benchmarks/tooling/src/bin/window_bias.rs",
         "events": hawkes["events"],
         "observed_horizon": hawkes["observed_horizon"],
         "last_event": hawkes["last_event"],

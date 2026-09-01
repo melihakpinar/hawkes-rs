@@ -15,10 +15,10 @@ if [ ! -x "$VENV/bin/python" ]; then
 fi
 
 mkdir -p "$WORK"
-cargo build --release --examples --manifest-path "$ROOT/Cargo.toml"
+cargo build --release -p hawkes-benchmarks --manifest-path "$ROOT/Cargo.toml"
 
 echo "=== hawkes ===" >&2
-"$ROOT/target/release/examples/inner_loop_probe" "$WORK"
+"$ROOT/target/release/inner_loop_probe" "$WORK"
 echo "=== tick ===" >&2
 "$VENV/bin/python" "$ROOT/benchmarks/suite/inner_loop_probe.py" "$WORK"
 

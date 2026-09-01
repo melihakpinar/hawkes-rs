@@ -178,6 +178,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "hawkes-benchmarks"
+version = "0.1.2"
+dependencies = [
+ "argmin",
+ "hawkes-rs",
+ "rand",
+ "rand_chacha",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "hawkes-python"
 version = "0.1.2"
 dependencies = [

@@ -19,7 +19,7 @@ bench_setup() {
             'tick==0.8.0.2' 'numpydoc==1.9.0'
     fi
     mkdir -p "$WORK" "$ROOT/benchmarks/results"
-    cargo build --release --examples --manifest-path "$ROOT/Cargo.toml"
+    cargo build --release -p hawkes-benchmarks --manifest-path "$ROOT/Cargo.toml"
 }
 
 # §4.1's cell budget, enforced by killing the process. A budget that cannot interrupt
@@ -48,9 +48,9 @@ bench_fit() {
     bench_setup
     for n in $(echo "$grid" | tr ',' ' '); do
         echo "=== d=$d n=$n ===" >&2
-        run_capped "$ROOT/target/release/examples/bench_fit" "$WORK" "$d" "$n"
+        run_capped "$ROOT/target/release/bench_fit" "$WORK" "$d" "$n"
         run_capped "$VENV/bin/python" "$ROOT/benchmarks/suite/bench_fit.py" "$WORK" "$d" "$n"
-        run_capped "$ROOT/target/release/examples/bench_score" "$WORK" "$d" "$n"
+        run_capped "$ROOT/target/release/bench_score" "$WORK" "$d" "$n"
     done
     "$VENV/bin/python" - "$WORK" "$d" "$grid" "$ROOT/benchmarks/results/fit-d$d.json" <<'PY'
 import json, pathlib, sys
@@ -84,7 +84,7 @@ bench_simulate() {
     bench_setup
     for d in "$@"; do
         echo "=== hawkes simulate, d=$d ===" >&2
-        "$ROOT/target/release/examples/bench_simulate" "$WORK" "$d" "$grid"
+        "$ROOT/target/release/bench_simulate" "$WORK" "$d" "$grid"
         echo "=== tick simulate, d=$d ===" >&2
         "$VENV/bin/python" "$ROOT/benchmarks/suite/bench_simulate.py" "$WORK" "$d" "$grid"
     done

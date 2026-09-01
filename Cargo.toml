@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["hawkes", "hawkes-python"]
+members = ["hawkes", "hawkes-python", "benchmarks/tooling"]
 
 [workspace.package]
 version = "0.1.2"
