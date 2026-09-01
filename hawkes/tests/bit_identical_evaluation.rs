@@ -32,6 +32,9 @@
 //! disappears into it. `agree_on_events_packed_against_the_horizon` was added for
 //! exactly that case and does catch it. Recorded in `docs/verification-log.md`.
 
+mod common;
+
+use common::Lcg;
 use hawkes::univariate::{
     Observation, Parameters, negative_log_likelihood, negative_log_likelihood_and_gradient,
 };
@@ -133,17 +136,11 @@ fn agree_on_events_packed_against_the_horizon() {
 /// into something a tolerance would still accept but the bit pattern will not.
 #[test]
 fn agree_on_long_realizations() {
-    let mut state = 0x2545_F491_4F6C_DD1Du64;
-    let mut next = || {
-        state ^= state << 13;
-        state ^= state >> 7;
-        state ^= state << 17;
-        (state >> 11) as f64 / (1u64 << 53) as f64
-    };
+    let mut rng = Lcg::new(0x2545_F491_4F6C_DD1D);
 
     for (count, decay) in [(2_000usize, 0.05), (2_000, 4.0), (20_000, 1.0)] {
         let horizon = count as f64 / 2.0;
-        let mut times: Vec<f64> = (0..count).map(|_| next() * horizon).collect();
+        let mut times: Vec<f64> = (0..count).map(|_| rng.next_f64() * horizon).collect();
         times.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let parameters = Parameters::new(1.3, 0.6, decay).unwrap();
         let observation = Observation::new(&times, horizon).unwrap();

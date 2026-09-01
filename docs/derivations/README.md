@@ -26,6 +26,7 @@ derivation; that separation is the entire point.
 | `multivariate_loglikelihood.md` | Awaiting owner approval. `d` dimensions: intensity, compensator, and the recursion grouped over distinct times pooled across all components. |
 | `multivariate_gradient.md` | Awaiting owner approval. Partials w.r.t. `mu[i]`, `alpha[i][j]` and `beta`, with the per-component state-derivative recursion. |
 | `check_multivariate_derivation.py` | Throwaway consistency check for the two above, including the `d = 1` bitwise reduction. |
+| `edge_case_hand_calculations.md` | Expected values for `hawkes/tests/input_contract.rs`: an event at exactly the horizon, at exactly zero, and the compensator on tied input, each substituted into an approved definition. |
 
 Anything that a source does not settle does not belong here. It belongs in
 `docs/open-questions.md`.

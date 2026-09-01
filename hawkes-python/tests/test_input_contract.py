@@ -7,6 +7,7 @@ The contract is the Rust one; the boundary must not widen or narrow it.
 from __future__ import annotations
 
 import numpy as np
+import numpy.typing as npt
 import pytest
 
 from hawkes import multivariate, univariate
@@ -222,3 +223,129 @@ def test_a_dimension_mismatch_between_parameters_and_events_raises() -> None:
         multivariate.negative_log_likelihood_and_gradient(_multi(3), events_2, 5.0)
     with pytest.raises(ValueError, match="must agree"):
         multivariate.compensator_at_events(_multi(3), events_2, 5.0)
+
+
+# --- the remaining variants, and the sweep (issue #46) ---------------------------------
+
+
+def test_a_non_finite_timestamp_is_rejected() -> None:
+    """C8 rule 4 cannot even be evaluated on a NaN; `hawkes` names it separately."""
+    with pytest.raises(ValueError, match="not finite"):
+        univariate.negative_log_likelihood(_uni(), np.array([1.0, np.nan, 3.0]), 5.0)
+    with pytest.raises(ValueError, match="not finite"):
+        multivariate.negative_log_likelihood(
+            _multi(), [np.array([1.0]), np.array([2.0, np.nan])], 5.0
+        )
+    # An infinite timestamp is both non-finite and outside the window; the contract
+    # does not order the two descriptions, so either message is accepted.
+    with pytest.raises(ValueError, match="not finite|outside the window"):
+        univariate.negative_log_likelihood(_uni(), np.array([np.inf]), 5.0)
+
+
+def test_multivariate_violations_are_reported_per_component() -> None:
+    """C8 is stated per component, and so is the report: the index in the message is
+    the position inside the offending component."""
+    with pytest.raises(ValueError, match="timestamp 6 at index 1 is outside"):
+        multivariate.negative_log_likelihood(
+            _multi(), [np.array([1.0, 2.0]), np.array([3.0, 6.0])], 5.0
+        )
+    with pytest.raises(ValueError, match="timestamp -0.5 at index 0 is outside"):
+        multivariate.negative_log_likelihood(
+            _multi(), [np.array([]), np.array([-0.5, 1.0])], 5.0
+        )
+    for horizon in (0.0, -1.0, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="horizon"):
+            multivariate.negative_log_likelihood(_multi(), [np.array([1.0]), np.array([])], horizon)
+
+
+def test_an_empty_component_list_is_rejected() -> None:
+    """A process needs at least one component, whichever entry point sees it first."""
+    with pytest.raises(ValueError, match="at least one component"):
+        multivariate.negative_log_likelihood(_multi(), [], 5.0)
+    with pytest.raises(ValueError, match="at least one component"):
+        multivariate.fit([], 5.0)
+    with pytest.raises(ValueError, match="at least one component"):
+        multivariate.Parameters(np.array([]), np.zeros((0, 0)), 1.0)
+
+
+def test_simulate_rejects_a_bad_horizon() -> None:
+    """C5 applies to simulation too: the window is the caller's, and must be one."""
+    for horizon in (0.0, -1.0, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="horizon"):
+            univariate.simulate(_uni(), horizon, seed=1)
+        with pytest.raises(ValueError, match="horizon"):
+            multivariate.simulate(_multi(), horizon, seed=1)
+
+
+def test_multivariate_fit_needs_d_plus_d_squared_plus_one_events() -> None:
+    """`d = 2` needs 7 events in total, however they are distributed."""
+    six = [np.array([0.5, 1.5, 2.5]), np.array([1.0, 2.0, 3.0])]
+    with pytest.raises(ValueError, match="6 events is not enough"):
+        multivariate.fit(six, 5.0)
+    seven = [np.array([0.5, 1.5, 2.5]), np.array([1.0, 2.0, 3.0, 4.0])]
+    fitted = multivariate.fit(seven, 5.0)
+    assert fitted.parameters.dimension == 2
+
+
+def _sorted_times(
+    rng: np.random.Generator, horizon: float, on_grid: bool
+) -> npt.NDArray[np.float64]:
+    """Sorted timestamps in ``[0, horizon]``; on the grid, ties and both endpoints are
+    common rather than incidental. Mirrors ``sorted_times`` in the Rust sweep."""
+    raw = rng.uniform(0.0, 1.0, size=rng.integers(1, 40))
+    if on_grid:
+        raw = np.round(raw * 8.0) / 8.0
+    return np.sort(raw * horizon)
+
+
+def test_random_valid_realizations_are_accepted_and_one_injected_violation_is_not() -> None:
+    """The randomised counterpart of the fixed cases above, through the bindings.
+
+    Each draw injects exactly one violation into an otherwise valid realization — NaN at
+    a random index, one ulp past the horizon at the last index, a negative value at
+    index 0, or a value below its predecessor — so that no case depends on the order in
+    which the validators run. Seeded, so a failure is reproducible.
+    """
+    rng = np.random.default_rng(0x5EED_46)
+    rejected = 0
+    for _ in range(300):
+        d = int(rng.integers(1, 4))
+        horizon = float(rng.uniform(0.5, 100.0))
+        on_grid = bool(rng.integers(0, 2))
+        events = [_sorted_times(rng, horizon, on_grid) for _ in range(d)]
+        parameters = _multi(d)
+
+        assert np.isfinite(multivariate.negative_log_likelihood(parameters, events, horizon))
+        if d == 1:
+            assert np.isfinite(univariate.negative_log_likelihood(_uni(), events[0], horizon))
+
+        component = int(rng.integers(0, d))
+        times = events[component].copy()
+        n = len(times)
+        kind = int(rng.integers(0, 4))
+        if kind == 0:
+            times[rng.integers(0, n)] = np.nan
+            message = "not finite"
+        elif kind == 1:
+            times[-1] = np.nextafter(horizon, np.inf)
+            message = "outside the window"
+        elif kind == 2:
+            times[0] = -float(rng.uniform(1e-3, 10.0))
+            message = "outside the window"
+        else:
+            if n < 2 or times[0] <= 0.0:
+                continue
+            index = int(rng.integers(1, n))
+            if times[index - 1] <= 0.0:
+                continue
+            times[index] = times[index - 1] * 0.5
+            message = "ascending"
+        events[component] = times
+
+        with pytest.raises(ValueError, match=message):
+            multivariate.negative_log_likelihood(parameters, events, horizon)
+        if d == 1:
+            with pytest.raises(ValueError, match=message):
+                univariate.negative_log_likelihood(_uni(), times, horizon)
+        rejected += 1
+    assert rejected >= 200, f"only {rejected} injected violations were exercised"
