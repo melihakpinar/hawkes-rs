@@ -5,6 +5,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-09-01
+
+README corrections and two fixes to the publish workflow. No library code changed.
+
+### Changed
+
+- README: the Rust install line is `cargo add hawkes-rs` alone. The `rand@0.9` pin and its
+  explanation moved below the quickstart, where the example needing them is visible, and
+  now say what the coupling is — `simulate` takes an `impl rand::Rng`, so `rand` is in the
+  public signature and every future `rand` major is a breaking change for callers (#42,
+  for v0.2).
+- README: every ratio reads **hawkes-rs / tick** and both table headers say so. The
+  simulation table had been inverted, so `0.54x` and `3.18x` pointed opposite ways on one
+  page. `benchmarks/suite/readme_tables.py` matches, so regeneration reproduces the README
+  rather than reverting it.
+
+### Fixed
+
+- The publish job now checks that the tag names the version the manifests build, before
+  anything is downloaded or uploaded. `v0.1.2` on a commit whose manifests still said
+  `0.1.1` rebuilt 0.1.1, uploaded nothing, and failed two minutes later as a sha mismatch —
+  a symptom three steps from the cause. An optional `-suffix` is stripped, so a deliberate
+  re-publish tag like `v0.1.0-publish` still matches.
+- `verify_pypi_release.py` compares sha256 only for the files the run actually uploaded,
+  decided by snapshotting the index before the upload. Wheels are not bit-reproducible:
+  rebuilding 0.1.1 gave five wheels differing from the published ones by one to three
+  bytes, while the sdist was byte-identical. Presence is still required for every file.
+
 ## [0.1.1] — 2026-08-31
 
 **Metadata only. No code changed.** `hawkes/src` and `hawkes-python/src` are byte for byte

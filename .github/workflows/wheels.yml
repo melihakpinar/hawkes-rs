@@ -222,6 +222,35 @@ jobs:
       # The verification script below lives in the repository.
       - uses: actions/checkout@v5
 
+      - name: Read the version from the manifest
+        id: crate_version
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | python -c \
+            "import json,sys; print(next(p['version'] for p in json.load(sys.stdin)['packages'] if p['name']=='hawkes-rs'))")
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+          echo "manifest says $version"
+
+      # A tag names a version; the manifests build one, and nothing connected the two.
+      # v0.1.2 on a commit whose manifests still said 0.1.1 rebuilt 0.1.1, uploaded
+      # nothing because every filename already existed, and failed two minutes later as
+      # a sha mismatch — a symptom three steps removed from the cause. This says it in
+      # the first seconds and names both numbers.
+      #
+      # An optional -suffix is stripped, so a deliberate re-publish tag such as
+      # v0.1.0-publish still matches the version it republishes.
+      - name: Tag must name the version the manifests build
+        run: |
+          tag='${{ github.ref_name }}'
+          manifest='${{ steps.crate_version.outputs.value }}'
+          named="${tag#v}"
+          named="${named%%-*}"
+          if [ "$named" != "$manifest" ]; then
+            echo "tag $tag names version $named, but the manifests build $manifest" >&2
+            echo "bump the version in Cargo.toml and hawkes-python/pyproject.toml, or move the tag" >&2
+            exit 1
+          fi
+          echo "tag $tag matches the manifest version $manifest"
+
       # Every wheel artifact, then the sdist, flattened into one directory.
       # merge-multiple puts their contents side by side rather than in per-artifact
       # subdirectories. Two steps rather than one brace pattern, so the match is
@@ -263,6 +292,11 @@ jobs:
       # rejects a filename it already has. 0.1.0 already carries the macOS arm64 wheel
       # and the sdist, so re-running this tag adds the four missing wheels and skips
       # those two instead of failing the job.
+      # Which files this run is responsible for. Anything already here was built
+      # fresh locally too, and its bytes are not expected to match what PyPI holds.
+      - name: Snapshot what PyPI already has
+        run: python .github/scripts/verify_pypi_release.py hawkes-rs --snapshot pypi-before.json
+
       - name: Upload
         env:
           TWINE_USERNAME: __token__
@@ -278,19 +312,13 @@ jobs:
       # name collision with a different build cannot pass. Sabotage is recorded in
       # docs/verification-log.md.
       - name: Verify the release is on PyPI
-        run: python .github/scripts/verify_pypi_release.py hawkes-rs dist
+        run: |
+          python .github/scripts/verify_pypi_release.py hawkes-rs dist \
+            --uploaded-since pypi-before.json
 
       # crates.io was published by hand for 0.1.0 and 0.1.1, which is exactly the step
       # that gets skipped: it is separate from the wheel pipeline and nothing failed
       # when it was missed. It goes in the same tag-triggered job so it cannot be.
-      - name: Read the version from the manifest
-        id: crate_version
-        run: |
-          version=$(cargo metadata --no-deps --format-version 1 | python -c \
-            "import json,sys; print(next(p['version'] for p in json.load(sys.stdin)['packages'] if p['name']=='hawkes-rs'))")
-          echo "value=$version" >> "$GITHUB_OUTPUT"
-          echo "manifest says $version"
-
       # `cargo publish` has no --skip-existing and fails on a version already there, so
       # re-pushing a tag would turn the job red for the wrong reason. Ask crates.io
       # first. If the query fails the answer is "not published", and the publish below

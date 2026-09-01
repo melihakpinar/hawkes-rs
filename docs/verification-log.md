@@ -1296,3 +1296,66 @@ The 404 case found a defect in the verifier itself on its first run: every attem
 so the diagnosis at the end read an unassigned `present` and died with `UnboundLocalError`
 instead of reporting the failure. It exited non-zero either way, but for the wrong reason
 and with no usable message. Fixed by initialising the state before the retry loop.
+
+## S52 — the tag and the manifest were never compared
+
+A `v0.1.2` tag was pushed at a commit whose manifests still said `0.1.1`. The tag name is
+not the version; the manifests are, and nothing connected them. The run rebuilt 0.1.1,
+`--skip-existing` skipped all six files because 0.1.1 was already complete, and the job
+failed two minutes later reporting a **sha256 mismatch on five wheels** — a symptom three
+steps removed from the cause. Nothing wrong was published; PyPI and crates.io both stayed
+at 0.1.1.
+
+Two defects, one of them in the S50 verifier itself.
+
+### The gate that did not exist
+
+The publish job now compares the tag against the manifest version before anything is
+downloaded or uploaded. An optional `-suffix` is stripped so a deliberate re-publish tag
+still matches the version it republishes.
+
+| tag | manifest | result |
+| --- | --- | --- |
+| `v0.1.2` | 0.1.1 | **red**, `tag v0.1.2 names version 0.1.2, but the manifests build 0.1.1` |
+| `v0.2.0` | 0.1.1 | **red**, names both numbers |
+| `v0.1.2` | 0.1.2 | green |
+| `v0.1.0-publish` | 0.1.0 | green — the suffix is stripped |
+| `v0.1.1-republish` | 0.1.1 | green |
+
+### The comparison that was wrong
+
+S50 compared every local file's sha256 against PyPI. That assumes this run uploaded every
+file, which `--skip-existing` makes false: a skipped file was still built fresh locally.
+
+**Wheels are not bit-reproducible**, measured rather than assumed. Rebuilding 0.1.1 from
+the same commit produced:
+
+| file | on PyPI | rebuilt |
+| --- | --- | --- |
+| `macosx_10_12_x86_64.whl` | 1 265 117 | 1 265 116 |
+| `macosx_11_0_arm64.whl` | 1 256 570 | 1 256 569 |
+| `manylinux_2_28_aarch64.whl` | 1 294 022 | 1 294 019 |
+| `manylinux_2_28_x86_64.whl` | 1 313 573 | 1 313 574 |
+| `win_amd64.whl` | 1 190 380 | 1 190 377 |
+| `hawkes_rs-0.1.1.tar.gz` | 111 426 | 111 426 — identical |
+
+Five wheels differ by one to three bytes; the sdist does not. That is exactly the
+`mismatched 5, missing 0` the run reported. Compiled objects vary between builds; a tarball
+of source does not.
+
+The verifier now snapshots the index **before** the upload. Files absent then are this
+run's, and only those are compared by digest; everything else is checked for presence only.
+
+### Sabotage
+
+| case | snapshot | result |
+| --- | --- | --- |
+| six real files | empty — all uploaded | green |
+| a wheel never uploaded | empty | **red**, missing |
+| one byte appended | empty | **red**, mismatched |
+| empty `dist/` | empty | **red**, refuses to report success |
+| one byte appended | full — nothing uploaded | **green**, the false positive that broke `v0.1.2` |
+| a wheel never uploaded | full | **red**, absence still caught |
+| one byte appended | no snapshot given | **red**, strict default preserved |
+
+Every S50 case stays red. The only behaviour that changed is the row this entry is about.
