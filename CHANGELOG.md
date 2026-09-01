@@ -15,6 +15,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the quickstart output and seeded simulations are identical before and after.
 - `rand_distr` is no longer a dependency of `hawkes-rs`; nothing in the crate used it.
 
+### Fixed
+
+- `Error::DimensionMismatch`'s message carried a run of ten spaces before "for a
+  d-component process"; it is single-spaced.
+- `hawkes.__version__` reported `0.1.0` on every wheel since 0.1.1. It now comes from
+  the installed distribution's metadata, so it is the version in `pyproject.toml`.
+
 ## [0.1.2] — 2026-09-01
 
 README corrections and two fixes to the publish workflow. No library code changed.

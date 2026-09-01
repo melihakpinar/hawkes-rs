@@ -67,7 +67,8 @@ pub enum Error {
     /// `baseline` has one entry per component and `excitation` is square in the same
     /// dimension.
     #[error(
-        "dimension mismatch: {what} has length {actual}, expected {expected}          for a {dimension}-component process"
+        "dimension mismatch: {what} has length {actual}, expected {expected} \
+         for a {dimension}-component process"
     )]
     DimensionMismatch {
         what: &'static str,

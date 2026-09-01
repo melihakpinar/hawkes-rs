@@ -1142,3 +1142,14 @@ proptest! {
         }
     }
 }
+
+/// The message is what a caller sees; it is pinned once so a formatting slip in the
+/// `#[error]` string — the ten-space run that #51 fixed — is caught.
+#[test]
+fn a_dimension_mismatch_renders_single_spaced() {
+    let error = multivariate::Parameters::new(vec![0.5, 0.5], vec![0.1; 3], 1.0).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "dimension mismatch: excitation has length 3, expected 4 for a 2-component process"
+    );
+}
