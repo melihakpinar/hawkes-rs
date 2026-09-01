@@ -13,7 +13,7 @@
 //! test suite produces for the same input.
 
 use numpy::{PyArray1, PyArray2, PyReadonlyArray1, PyReadonlyArray2};
-use pyo3::exceptions::{PyTypeError, PyValueError};
+use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -44,8 +44,6 @@ fn to_py_error(error: Error) -> PyErr {
         Error::OptimizerFailed { .. } => PyRuntimeError::new_err(message),
     }
 }
-
-use pyo3::exceptions::PyRuntimeError;
 
 /// Reads a 1-D `float64` array into an owned `Vec<f64>`.
 ///
@@ -174,7 +172,6 @@ impl UnivariateFit {
 }
 
 #[pyfunction]
-#[pyo3(name = "univariate_negative_log_likelihood")]
 fn univariate_negative_log_likelihood(
     parameters: &UnivariateParameters,
     times: PyReadonlyArray1<'_, f64>,
@@ -189,7 +186,6 @@ fn univariate_negative_log_likelihood(
 }
 
 #[pyfunction]
-#[pyo3(name = "univariate_negative_log_likelihood_and_gradient")]
 fn univariate_negative_log_likelihood_and_gradient(
     parameters: &UnivariateParameters,
     times: PyReadonlyArray1<'_, f64>,
@@ -208,7 +204,6 @@ fn univariate_negative_log_likelihood_and_gradient(
 }
 
 #[pyfunction]
-#[pyo3(name = "univariate_simulate")]
 fn univariate_simulate<'py>(
     py: Python<'py>,
     parameters: &UnivariateParameters,
@@ -222,7 +217,6 @@ fn univariate_simulate<'py>(
 }
 
 #[pyfunction]
-#[pyo3(name = "univariate_fit")]
 fn univariate_fit(times: PyReadonlyArray1<'_, f64>, horizon: f64) -> PyResult<UnivariateFit> {
     let owned = vector_from(&times);
     let observation = hawkes::univariate::Observation::new(&owned, horizon).map_err(to_py_error)?;
@@ -366,7 +360,9 @@ impl MultivariateFit {
 /// Converts a Python sequence of 1-D `float64` arrays into per-component events.
 ///
 /// Each component is read with the same policy as any other array
-/// (`python-array-handling.md`): `float64` only, copied, read-only accepted.
+/// (`python-array-handling.md`): `float64` only, copied, read-only accepted. An
+/// empty sequence is passed through: `multivariate::Observation::new` rejects it as
+/// `EmptyProcess`, and every caller of this function hands the result to it.
 fn events_from(events: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<f64>>> {
     let mut out = Vec::new();
     for item in events.try_iter()? {
@@ -379,14 +375,10 @@ fn events_from(events: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<f64>>> {
         })?;
         out.push(vector_from(&array));
     }
-    if out.is_empty() {
-        return Err(to_py_error(Error::EmptyProcess));
-    }
     Ok(out)
 }
 
 #[pyfunction]
-#[pyo3(name = "multivariate_negative_log_likelihood")]
 fn multivariate_negative_log_likelihood(
     parameters: &MultivariateParameters,
     events: &Bound<'_, PyAny>,
@@ -409,7 +401,6 @@ type MultivariateGradientTuple<'py> = (
 );
 
 #[pyfunction]
-#[pyo3(name = "multivariate_negative_log_likelihood_and_gradient")]
 fn multivariate_negative_log_likelihood_and_gradient<'py>(
     py: Python<'py>,
     parameters: &MultivariateParameters,
@@ -436,7 +427,6 @@ fn multivariate_negative_log_likelihood_and_gradient<'py>(
 }
 
 #[pyfunction]
-#[pyo3(name = "multivariate_compensator_at_events")]
 fn multivariate_compensator_at_events<'py>(
     py: Python<'py>,
     parameters: &MultivariateParameters,
@@ -456,7 +446,6 @@ fn multivariate_compensator_at_events<'py>(
 }
 
 #[pyfunction]
-#[pyo3(name = "multivariate_simulate")]
 fn multivariate_simulate<'py>(
     py: Python<'py>,
     parameters: &MultivariateParameters,
@@ -473,7 +462,6 @@ fn multivariate_simulate<'py>(
 }
 
 #[pyfunction]
-#[pyo3(name = "multivariate_fit")]
 fn multivariate_fit(events: &Bound<'_, PyAny>, horizon: f64) -> PyResult<MultivariateFit> {
     // No dimension check: `fit` takes the dimension from the observation itself, so
     // there is no second argument for it to disagree with.

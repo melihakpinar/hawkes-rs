@@ -5,10 +5,11 @@ degrades precision — a widening cast, a copy through a lower-precision interme
 reordered reduction — and only bitwise equality rules that out. Everything downstream
 inherits whatever this allows.
 
-The comparison is against ``tests/fixtures/rust-nll.json``, which records what ``hawkes``
-computes in Rust as an exact bit pattern, and which ``hawkes/tests/rust_nll_manifest.rs``
-fails on if it goes stale. Both sides call the same Rust function, so any difference
-can only have come from the boundary.
+The comparison is against ``target/rust-nll.json``, which records what ``hawkes``
+computes in Rust as an exact bit pattern and is generated on this machine by
+``cargo run --example dump_fixture_nll`` (see ``conftest.py`` for why it is not
+committed). Both sides call the same Rust function, so any difference can only have
+come from the boundary.
 
 Bit patterns rather than decimal: a decimal round trip is itself a conversion and would
 hide exactly what is being looked for.
