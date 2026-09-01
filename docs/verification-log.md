@@ -1359,3 +1359,83 @@ run's, and only those are compared by digest; everything else is checked for pre
 | one byte appended | no snapshot given | **red**, strict default preserved |
 
 Every S50 case stays red. The only behaviour that changed is the row this entry is about.
+
+## S53 — the input contract, and four tests proven redundant
+
+Issue #46. Before this, the Rust suite had no test for `NonFiniteEvent`, for any error
+`multivariate::Observation::new` or `multivariate::Parameters::new` can return, for
+`simulate` rejecting a bad horizon, or for `fit` / `fit_from` rejecting too few events or
+a wrong start length. `hawkes/tests/input_contract.rs` now covers every variant of
+`Error` that a caller can provoke, each as a fixed case **and** as a randomised sweep
+that draws valid input and injects exactly one violation. The numeric expectations in
+it — an event at exactly the horizon, at exactly zero, the compensator on tied input —
+are in `docs/derivations/edge_case_hand_calculations.md`.
+
+### Sabotage
+
+Thirty-one mutations, one validator disabled at a time, each followed by the affected
+test binaries with `--no-fail-fast` and then reverted. The mutation, and which tests went
+red:
+
+| Disabled | Red in `input_contract.rs` | Red elsewhere |
+| --- | --- | --- |
+| univariate `Parameters`: the `<= 0` check | `..._reject_non_positive_values`, the parameters sweep | `reference_loglikelihood::rejects_invalid_input` |
+| univariate `Parameters`: the finite check | `..._reject_non_finite_values`, the sweep | `rejects_invalid_input` |
+| univariate `Observation`: `horizon <= 0` only | `..._rejects_a_bad_horizon` | **nothing** — see below |
+| univariate `Observation`: `horizon.is_finite()` only | `..._rejects_a_bad_horizon`, `..._rejects_a_random_bad_horizon` | — |
+| univariate `Observation`: the finite-event check | `..._rejects_non_finite_events`, the injection sweep | — |
+| univariate `Observation`: `time > horizon` | `..._one_ulp_past_the_horizon`, the sweep | `rejects_invalid_input` |
+| univariate `Observation`: `time < 0` | the same two | `rejects_invalid_input` |
+| univariate `Observation`: `>` made `>=` (rejects an event at `T`) | the two acceptance tests, the sweep, both event-at-horizon hand cases | `rejects_invalid_input` |
+| univariate `Observation`: the order check | `..._rejects_unsorted_input`, the sweep | `rejects_invalid_input` |
+| univariate `Observation`: `<` made `<=` (rejects ties) | the acceptance tests, the sweep, the tied-compensator hand case | `rejects_invalid_input`, `tied_events_do_not_excite_each_other`, `degenerates_to_the_poisson_likelihood` |
+| `univariate::fit`: the three-event bound | both fit tests | `roundtrip_proptest::rejects_data_that_cannot_identify_the_parameters` |
+| `univariate::simulate`: the horizon check | `simulate_rejects_a_bad_horizon` | — |
+| `univariate::compensator_at_events`: advance by `1.0` instead of the tie count | `the_compensator_at_tied_events_matches_the_hand_calculation` | — |
+| multivariate `Parameters`: the empty check | `..._reject_an_empty_process`, the sweep | — |
+| multivariate `Parameters`: the `d*d` length check | `..._reject_a_non_square_excitation`, the sweep | — |
+| multivariate `Parameters`: the excitation `< 0` check | `..._reject_a_bad_excitation_entry`, the sweep | — |
+| multivariate `Parameters`: `decay <= 0` | `..._reject_a_bad_decay` | — |
+| multivariate `Parameters`: baseline `<= 0` | `..._reject_a_bad_baseline_entry` | — |
+| multivariate `Observation`: the empty check | `..._rejects_an_empty_component_list` | — |
+| multivariate `Observation`: the horizon check | `..._rejects_a_bad_horizon` | — |
+| multivariate `Observation`: finite / window / order checks (three mutations) | `..._rejects_a_violation_in_any_component`, the injection sweep | — |
+| `compensator_at_events`: `ensure_dimensions_agree` | `every_entry_point_rejects_a_random_mismatch` | `multivariate_loglikelihood::every_multivariate_entry_point_rejects_a_mismatch` |
+| `multivariate::fit`: the data bound | **nothing** — `fit_from` re-checks it | — |
+| `fit_from`: the data bound | both multivariate fit tests | — |
+| `fit_from`: the start-length check | both `fit_from` tests | — |
+| `multivariate::simulate`: the horizon check | `simulate_rejects_a_bad_horizon`, its sweep | — |
+| `stationary_mean_intensity`: the spectral-radius check | — | `spectral_radius::stationarity_verdicts_on_reducible_matrices`, `multivariate_simulator::non_stationary_parameters_have_no_mean_intensity` |
+| `branching_ratio_spectral_radius`: the `+ I` shift | — | every case in `spectral_radius.rs`, plus the two `multivariate_simulator` radius tests |
+| workspace `serde_json`: `float_roundtrip` | — | all five tests in `fixture_parsing.rs` |
+
+Two things the table shows that were not known before:
+
+- **`rejects_invalid_input`'s `horizon = 0` assertion was vacuous.** With the horizon
+  check disabled it stayed green, because its one event at `1.0` was already past a zero
+  horizon and was rejected for that reason instead. The new test uses an empty realization
+  and a valid one, so the horizon check is the only thing that can reject.
+- **`multivariate::fit`'s own data bound is unreachable-in-effect.** `fit_from` re-checks
+  it, so removing it changes nothing observable. Left in place; it is documentation.
+
+### The four deletions
+
+Each is class (b) of #46: every defect it detects is also detected by a surviving test,
+shown above.
+
+| Deleted | Survivor |
+| --- | --- |
+| `reference_loglikelihood::rejects_invalid_input` | the `univariate_parameters_*` and `univariate_observation_*` tests in `input_contract.rs`; each of its seven assertions maps to a row above, and the eighth (acceptance of `[0, 2, 2, 5]`) to `..._accepts_the_window_endpoints_and_ties` |
+| `roundtrip_proptest::rejects_data_that_cannot_identify_the_parameters` | `univariate_fit_rejects_fewer_than_three_events` and its sweep |
+| `fixture_parsing::serde_json_parses_fixture_floats_to_the_nearest_double`, `fixture_shaped_parsing_is_also_exact` | `hard_values_survive_the_fixture_round_trip` (which now names the same three bit patterns), the random sweep, and the corpus scan — S48 already recorded all five going red together |
+| `multivariate_simulator::non_stationary_parameters_have_no_mean_intensity` | `spectral_radius::stationarity_verdicts_on_reducible_matrices` (the solve-succeeds-but-not-stationary case) and `irreducible_matrices_are_unaffected` (the periodic matrix that forced the shift) |
+
+### A finding that is not about these tests
+
+While the campaign ran, `roundtrip_proptest::recovers_parameters_within_their_standard_errors`
+failed once on its own — under a mutation that does not touch anything `fit` uses — and
+proptest then replayed the shrunk case on every later run, on unmodified code, red each
+time: `baseline = 0.3017, excitation = 0.2, decay = 0.9705, seed = 24045`, decay fitted
+at `0.357`, 6.9 standard errors out. That is a real case at the strategy's lower
+excitation bound, not an artefact of the campaign. It is filed as #47 and the regression
+file is not committed, for the reasons given there.
