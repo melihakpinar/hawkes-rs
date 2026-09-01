@@ -19,16 +19,16 @@ if [ ! -x "$VENV/bin/python" ]; then
 fi
 
 mkdir -p "$WORK"
-cargo build --release --examples --manifest-path "$ROOT/Cargo.toml"
+cargo build --release -p hawkes-benchmarks --manifest-path "$ROOT/Cargo.toml"
 
 echo "=== hawkes ===" >&2
-"$ROOT/target/release/examples/positioning_probe" "$WORK"
+"$ROOT/target/release/positioning_probe" "$WORK"
 
 echo "=== tick ===" >&2
 "$VENV/bin/python" "$ROOT/benchmarks/suite/positioning_probe.py" "$WORK"
 
 echo "=== scoring tick's parameters under hawkes's objective ===" >&2
-"$ROOT/target/release/examples/score_tick" "$WORK" > "$WORK/tick_scored.txt"
+"$ROOT/target/release/score_tick" "$WORK" > "$WORK/tick_scored.txt"
 cat "$WORK/tick_scored.txt" >&2
 
 mkdir -p "$ROOT/benchmarks/results"

@@ -1,5 +1,7 @@
 //! Measures the rayon path against the sequential one. Numbers only.
-#![cfg(feature = "rayon")]
+//!
+//! `cargo run --release -p hawkes-benchmarks --features rayon --bin parallel_probe`;
+//! the result is `benchmarks/results/multivariate-parallel.json`.
 use std::hint::black_box;
 use std::time::Instant;
 

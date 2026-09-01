@@ -71,7 +71,7 @@ impl Parameters {
                 dimension,
             });
         }
-        for (index, &value) in baseline.iter().enumerate() {
+        for &value in &baseline {
             if !value.is_finite() {
                 return Err(Error::NonFiniteParameter {
                     name: "baseline",
@@ -79,7 +79,6 @@ impl Parameters {
                 });
             }
             if value <= 0.0 {
-                let _ = index;
                 return Err(Error::NonPositiveParameter {
                     name: "baseline",
                     value,
@@ -191,21 +190,19 @@ impl Parameters {
             |i: usize, j: usize| self.excitation[i * d + j] + if i == j { 1.0 } else { 0.0 };
 
         let mut x = vec![1.0f64; d];
-        let mut lower = 0.0f64;
+        let mut y = vec![0.0f64; d];
         let mut upper = f64::INFINITY;
 
         // Geometric convergence; the cap is a backstop, not the expected exit.
         for _ in 0..10_000 {
-            let y: Vec<f64> = (0..d)
-                .map(|i| {
-                    let mut acc = 0.0;
-                    for j in 0..d {
-                        acc += shifted(i, j) * x[j];
-                    }
-                    acc
-                })
-                .collect();
-            lower = f64::INFINITY;
+            for i in 0..d {
+                let mut acc = 0.0;
+                for j in 0..d {
+                    acc += shifted(i, j) * x[j];
+                }
+                y[i] = acc;
+            }
+            let mut lower = f64::INFINITY;
             upper = 0.0;
             for i in 0..d {
                 let ratio = y[i] / x[i];
@@ -230,7 +227,6 @@ impl Parameters {
                 *slot = value / norm * d as f64;
             }
         }
-        let _ = lower;
         // The upper bound, shifted back. See the note above on why not the midpoint.
         (upper - 1.0).max(0.0)
     }
@@ -523,8 +519,8 @@ pub fn negative_log_likelihood(
     let mut compensator = vec![0.0f64; d];
     // Accumulated per component and combined in index order at the end, so the
     // summation order does not depend on how the per-component work is scheduled.
-    // That is what lets the parallel path be bitwise identical (step 14); it is not
-    // an optimisation.
+    // That is what lets the parallel path be bitwise identical, which
+    // `multivariate_parallel.rs` asserts; it is not an optimisation.
     let mut log_term_parts = vec![0.0f64; d];
     let mut previous_time = 0.0f64;
     let mut previous_counts = vec![0usize; d];
@@ -589,8 +585,8 @@ pub fn negative_log_likelihood(
 /// The `d/dbeta` assembly uses the per-pair accumulator (MG.7) and forms
 /// `sum_ij alpha[i][j] * (dE_j - S[i][j])`, equation (MG.8). That factoring is chosen
 /// so `d = 1` reduces bitwise to `univariate`'s `alpha * (X - Y)` association; the
-/// natural alternative does not, and would have required re-associating already
-/// approved M1 code.
+/// natural alternative does not, and would have required re-associating the
+/// univariate implementation.
 pub fn negative_log_likelihood_and_gradient(
     parameters: &Parameters,
     observation: &Observation,

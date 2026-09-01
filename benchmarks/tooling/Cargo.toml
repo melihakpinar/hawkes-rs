@@ -1,0 +1,32 @@
+[package]
+name = "hawkes-benchmarks"
+description = "Benchmark and probe binaries for hawkes-rs; not a library and not published"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+# One binary per file under src/bin/. Each is driven by a script in
+# ../suite/ and writes to a work directory; see ../README.md.
+[dependencies]
+hawkes-rs = { path = "../../hawkes" }
+rand.workspace = true
+rand_chacha.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# `d100_diagnosis` assembles the optimizer from argmin directly, to be identical
+# to `multivariate::fit_from`; the version must stay the one the library uses.
+argmin = { version = "0.11", default-features = false }
+
+[features]
+# `parallel_probe` measures the library's `rayon` path and needs it compiled in.
+# Off by default so that a workspace-wide `cargo test` does not silently enable
+# `hawkes-rs/rayon` through feature unification.
+rayon = ["hawkes-rs/rayon"]
+
+[[bin]]
+name = "parallel_probe"
+required-features = ["rayon"]

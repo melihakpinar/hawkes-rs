@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["hawkes", "hawkes-python"]
+members = ["hawkes", "hawkes-python", "benchmarks/tooling"]
 
 [workspace.package]
 version = "0.1.2"
@@ -23,7 +23,6 @@ proptest = "1"
 rayon = "1"
 rand = "0.9"
 rand_chacha = "0.9"
-rand_distr = "0.5"
 
 # `cargo test` runs the statistical oracles: round-trip fits over hundreds of
 # randomized parameter sets, KS residuals on realizations of thousands of events. At

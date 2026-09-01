@@ -98,7 +98,7 @@ fn main() {
     let json = format!(
         "{{\n  \"what\": \"negative log-likelihood computed by hawkes in Rust, as exact \
          bit patterns\",\n  \"generated_by\": \"cargo run --example dump_fixture_nll\",\n  \
-         \"kept_current_by\": \"hawkes/tests/rust_nll_manifest.rs\",\n  \"entries\": [\n{}\n  ]\n}}\n",
+         \"committed\": \"no: the values are platform-dependent; see hawkes/examples/dump_fixture_nll.rs\",\n  \"entries\": [\n{}\n  ]\n}}\n",
         entries.join(",\n")
     );
     if let Some(parent) = output.parent() {
