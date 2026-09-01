@@ -349,3 +349,14 @@ def test_random_valid_realizations_are_accepted_and_one_injected_violation_is_no
                 univariate.negative_log_likelihood(_uni(), times, horizon)
         rejected += 1
     assert rejected >= 200, f"only {rejected} injected violations were exercised"
+
+
+def test_version_is_the_distribution_version() -> None:
+    """``__version__`` is derived from the installed metadata, not typed a third time.
+    Every wheel from 0.1.1 to 0.1.2 reported ``0.1.0`` because it was (#51)."""
+    from importlib.metadata import version
+
+    import hawkes
+
+    assert hawkes.__version__ == version("hawkes-rs")
+    assert hawkes.__version__ != "0.1.0"

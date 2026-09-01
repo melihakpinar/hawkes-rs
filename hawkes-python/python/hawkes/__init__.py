@@ -35,7 +35,10 @@ No Rust panic reaches the interpreter; ``hawkes``'s library code returns ``Resul
 rather than panicking (CLAUDE.md §5), and the bindings map every variant explicitly.
 """
 
+from importlib.metadata import version
+
 from hawkes import multivariate, univariate
 
 __all__ = ["multivariate", "univariate"]
-__version__ = "0.1.0"
+# The distribution's own metadata, so the number is written once, in pyproject.toml.
+__version__ = version("hawkes-rs")
